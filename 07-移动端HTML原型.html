@@ -1,0 +1,1344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>大冶市城市智能预警平台 · 移动端原型（Demo）</title>
+<!--
+==================================================================================
+ 大冶市城市智能预警平台 · 移动端 Demo 原型（单文件 / 内联 CSS+JS / 无外部依赖）
+ 业务蓝本：01-资料阅读总结报告.md、06-业务流程逻辑与功能调整建议.md
+ 模拟数据：区域、责任单位、时间、预警级别均为演示虚构数据
+
+ ★ 页面清单与跳转关系（→=页面跳转，⇢=弹窗/Toast，[]=底部Tab）
+ -------------------------------------------------------------------------------
+ [登录] login
+   └→ home（账密 / 手机号验证码登录）
+
+ [首页] home ────────────────────────────────────────────────────────────
+   ├→ warn-detail（紧急工单横幅 / 待办卡片 / 最新预警卡片）
+   ├→ signals（快捷入口「信号研判(2)」，值守角色可见）
+  └⇢ roleSheet（角色条「切换角色」→ 弹窗选角色 → 确认）
+   ├→ report（快捷入口「巡查上报」）
+   ├→ todo（快捷入口「我的待办」）
+   ├→ message（标题栏消息铃铛）
+   ├→ risk-detail（今日火险预警卡整卡可点）
+   ├→ signals（入口已全部收起：待办「待研判」段与《我的》菜单均已注释，代码保留可恢复）
+
+ [预警] warn-list（3 个分段：火险预警 / 工单预警 / 应急响应）
+   ├→ warn-detail（工单预警条目）
+   ├→ risk-detail（火险预警条目，复用 warn-detail 渲染为火险模板）
+   └→ flow（应急响应空态的「查看规则」）
+
+ [上报] report（现场巡查上报表单：类型/区域/定位/描述/图片/紧急程度）
+   └⇢ 提交成功弹窗 → my-reports（我的上报记录，新记录置顶）
+        └→ warn-detail（若已被研判为工单，显示关联工单号）
+
+ [待办] todo（分段：全部 / 待审批 / 待签收 / 待反馈 / 待核查；「待研判」为 PC 功能已收起）
+   ├→ signals → judge（值守研判三分支，PC 功能：待办/我的入口均已收起，仅代码保留）
+   │      ├⇢ 确认预警 → 自动生成工单（工单·黄/橙/红）→ warn-detail（状态=待派发）
+   │      ├⇢ 待核查   → 生成核查工单 → 属地 1 小时内反馈
+   │      └⇢ 误报     → 记录原因 → 解除预警
+   └→ warn-detail（其余分段条目）
+
+ [我的] mine
+   ├→ my-reports（我的上报）
+   ├→ flow（页面跳转关系 & 三套分级说明 & 演示说明）
+   └→ 系统设置（消息通知 / 定位权限 / 值班排班 / 通讯录）
+
+ 工单详情 warn-detail（业务闭环中枢，按状态渲染不同底部操作）
+   ├⇢ 带班领导审批（红色工单，待审批状态）
+   ├⇢ 分级派发（待派发状态：选派发对象 + 短信/移动端双通道）
+   ├⇢ 接单确认（待签收，5 分钟倒计时）
+   ├⇢ 到场打卡（处置中，定位打卡，15/30/60 分钟到场计时）
+   ├→ feedback（处置进展反馈，每 30 分钟一次）
+   ├→ result-report（扑灭后 30 分钟内结果报告）
+   ├→ verify（市局核查：通过 / 退回重办）
+   ├⇢ 申请支援 / 建议启动Ⅳ级响应（红色工单 6 小时未扑灭）
+   └→ flow（右上角「流程」）
+
+ feedback / result-report 提交 → 回写工单时间轴 + 状态流转 → warn-detail
+ verify 通过 → 办结销号 → 自动归档 Toast；退回 → 填原因 → 状态回退「处置中」
+
+ 消息 message → warn-detail（按关联工单跳转）
+==================================================================================
+-->
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;height:100%}
+body{background:#EDF1F7;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue","Microsoft YaHei",sans-serif;
+ display:flex;align-items:center;justify-content:center;min-height:100vh;color:#1B2430;font-size:14px}
+.phone{width:375px;height:812px;background:#fff;position:relative;overflow:hidden;border-radius:30px;border:9px solid #111827;
+ box-shadow:0 18px 50px rgba(16,38,74,.22)}
+@media (max-width:520px){body{display:block}.phone{width:100vw;height:100vh;border:none;border-radius:0;box-shadow:none}}
+/* 宽屏：跳转关系平铺侧栏 */
+#flowmap{display:none;width:600px;max-height:830px;overflow-y:auto;margin-left:40px;background:#fff;border-radius:18px;
+ box-shadow:0 18px 50px rgba(16,38,74,.14);padding:24px 26px;box-sizing:border-box}
+#flowmap .fm-title{font-size:17px;font-weight:700;color:#1B2430}
+#flowmap .fm-sub{font-size:11px;color:#8A94A6;margin-top:4px}
+#flowmap .fm-sec{font-size:13px;font-weight:600;color:#33404F;margin:18px 0 10px;padding-left:8px;border-left:3px solid #1668DC;line-height:16px}
+#flowmap .fm-chain span{display:inline-block;background:#E8F1FE;color:#0F4C9B;font-size:11px;border-radius:6px;padding:4px 8px;margin:0 0 6px 0}
+#flowmap .fm-chain i{font-style:normal;color:#9AA7B8;font-size:11px;margin:0 5px 6px 0}
+#flowmap .fm-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#flowmap .fm-cell{background:#F7F9FC;border-radius:10px;padding:10px 12px}
+#flowmap .fm-cell .t{font-size:12px;font-weight:600;color:#1B2430}
+#flowmap .fm-cell .t em{font-style:normal;color:#1668DC;font-size:10px;margin-left:4px}
+#flowmap .fm-cell .d{font-size:11px;color:#6B7688;line-height:17px;margin-top:4px}
+#flowmap .fm-kv{display:flex;justify-content:space-between;gap:12px;font-size:12px;padding:5px 0;border-bottom:1px dashed #EEF1F6}
+#flowmap .fm-kv:last-child{border-bottom:none}
+#flowmap .fm-kv .k{color:#8A94A6;flex:0 0 96px}
+#flowmap .fm-kv .v{color:#33404F;text-align:right}
+@media (min-width:1060px){#flowmap{display:block}}
+.screen{position:absolute;inset:0;display:flex;flex-direction:column;background:#F4F6FA}
+/* 状态栏 */
+.statusbar{height:30px;flex:0 0 30px;background:#0F4C9B;display:flex;align-items:center;justify-content:space-between;
+ padding:0 16px;color:#fff;font-size:11px;letter-spacing:.3px}
+.statusbar .sb-r{display:flex;align-items:center;gap:4px}
+/* 标题栏 */
+.navbar{height:46px;flex:0 0 46px;background:linear-gradient(135deg,#0F4C9B,#1668DC);color:#fff;display:flex;align-items:center;
+ padding:0 8px;position:relative}
+.navbar .nb-title{position:absolute;left:0;right:0;text-align:center;font-size:16px;font-weight:600;pointer-events:none}
+.navbar .nb-btn{min-width:44px;height:44px;display:flex;align-items:center;justify-content:center;position:relative;z-index:2;color:#fff}
+.navbar .nb-btn.right{margin-left:auto;font-size:13px;font-weight:400;min-width:auto;padding:0 10px}
+/* 视图区 */
+.view{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;background:#F4F6FA;padding-bottom:8px}
+.view::-webkit-scrollbar{width:0}
+/* 底部 Tab */
+.tabbar{flex:0 0 58px;height:58px;background:#fff;border-top:1px solid #E6EAF2;display:flex;align-items:stretch;
+ padding-bottom:env(safe-area-inset-bottom)}
+.tabbar .tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:#8A94A6;font-size:10px}
+.tabbar .tab.on{color:#1668DC}
+.tabbar .tab.mid .ic{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#1668DC,#0F4C9B);
+ display:flex;align-items:center;justify-content:center;margin-top:-14px;box-shadow:0 4px 12px rgba(22,104,220,.4);color:#fff}
+.tabbar .tab.mid.on .ic{background:linear-gradient(135deg,#0F4C9B,#0A3A78)}
+/* 通用 */
+.card{background:#fff;margin:10px 12px;border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(20,40,80,.06)}
+.card.nopad{padding:0}
+.sec-title{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 8px;font-size:15px;font-weight:600;color:#1B2430}
+.sec-title .more{font-size:12px;color:#8A94A6;font-weight:400}
+.row{display:flex;align-items:center;gap:10px}
+.between{display:flex;align-items:center;justify-content:space-between}
+.muted{color:#8A94A6}
+.small{font-size:12px}
+.tiny{font-size:11px}
+.b{font-weight:600}
+.mt8{margin-top:8px}.mt12{margin-top:12px}.mt16{margin-top:16px}
+.hr{height:1px;background:#EEF1F6;margin:12px 0}
+/* 等级色 */
+.lv{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;line-height:18px}
+.lv-blue{color:#0B5FD0;background:#E8F1FE}
+.lv-yellow{color:#A56A00;background:#FFF4DE}
+.lv-orange{color:#C1510A;background:#FFEBDD}
+.lv-red{color:#C21F1F;background:#FDE8E8}
+.lv-resp{color:#6B4BE8;background:#EFEAFE}
+.lv-gray{color:#6B7688;background:#F0F2F6}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+/* 按钮 */
+.btn{flex:1;height:44px;border:none;border-radius:10px;background:#1668DC;color:#fff;font-size:15px;font-weight:600;
+ display:flex;align-items:center;justify-content:center;gap:6px}
+.btn.ghost{background:#fff;color:#1668DC;border:1px solid #B9D2F7}
+.btn.warn{background:#E8590C}
+.btn.danger{background:#D92B2B}
+.btn.ok{background:#1E9E63}
+.btn:active{opacity:.85}
+.btn-sm{height:32px;padding:0 12px;font-size:13px;border-radius:8px;flex:none;font-weight:500;border:none}
+.btn-sm.pri{background:#1668DC;color:#fff}
+.btn-sm.line{background:#fff;color:#1668DC;border:1px solid #B9D2F7}
+.btn-sm.solid{background:#1668DC;color:#fff}
+.btn-sm.gray{background:#F0F2F6;color:#6B7688}
+/* 底部操作栏 */
+.actionbar{flex:0 0 auto;background:#fff;border-top:1px solid #E6EAF2;padding:8px 12px calc(8px + env(safe-area-inset-bottom));
+ display:flex;gap:8px;align-items:center;box-shadow:0 -2px 8px rgba(20,40,80,.05)}
+/* 表单 */
+.form-item{padding:6px 14px;background:#fff;border-bottom:1px solid #F1F4F9;display:flex;align-items:flex-start;gap:6px}
+.form-item .lab{flex:0 0 60px;color:#6B7688;font-size:12px;line-height:22px}
+.form-item .val{flex:1;font-size:14px;line-height:22px}
+input,textarea,select{font-family:inherit;font-size:14px;color:#1B2430;border:none;outline:none;width:100%;background:transparent}
+textarea{resize:none;min-height:60px;line-height:20px}
+.pick{flex:1;display:flex;flex-wrap:wrap;gap:5px}
+.chip{padding:3px 9px;border-radius:14px;background:#F0F2F6;color:#4A5666;font-size:12px;border:1px solid transparent}
+.chip.on{background:#E8F1FE;color:#1668DC;border-color:#9CC2F5;font-weight:600}
+/* 上传图片格 */
+.photos{display:flex;flex-wrap:wrap;gap:6px}
+.ph{width:66px;height:66px;border-radius:8px;background:linear-gradient(160deg,#CFE3F7,#9CC2F5);position:relative;
+ display:flex;align-items:center;justify-content:center;overflow:hidden}
+.ph .del{position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;background:rgba(0,0,0,.5);color:#fff;
+ font-size:11px;display:flex;align-items:center;justify-content:center}
+.ph.add{background:#F4F6FA;border:1px dashed #C6CFDC;color:#8A94A6;flex-direction:column;gap:2px;font-size:11px}
+/* 时间轴 */
+.tl{position:relative;padding-left:20px}
+.tl::before{content:"";position:absolute;left:5px;top:6px;bottom:6px;width:2px;background:#E3E8F0}
+.tl-item{position:relative;padding-bottom:14px}
+.tl-item::before{content:"";position:absolute;left:-19px;top:5px;width:10px;height:10px;border-radius:50%;background:#C6CFDC;border:2px solid #fff}
+.tl-item.now::before{background:#1668DC;box-shadow:0 0 0 3px rgba(22,104,220,.18)}
+.tl-item.red::before{background:#D92B2B}
+/* 列表项 */
+.li{display:flex;gap:10px;padding:12px 14px;border-bottom:1px solid #F1F4F9;background:#fff}
+.li:active{background:#F7F9FC}
+/* 倒计时 */
+.cd{font-variant-numeric:tabular-nums;font-weight:600}
+.cd.over{color:#D92B2B}
+/* 统计格 */
+.grid4{display:flex;background:#fff;border-radius:12px;margin:10px 12px;padding:12px 0;text-align:center}
+.grid4>div{flex:1;position:relative}
+.grid4>div+div::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:1px;background:#EEF1F6}
+.grid4 .n{font-size:20px;font-weight:700;line-height:26px}
+/* 提示条 */
+.tipbar{display:flex;gap:8px;align-items:flex-start;background:#FFF8E6;border:1px solid #FFE7AE;border-radius:10px;
+ margin:10px 12px;padding:10px 12px;color:#8A5A00;font-size:12px;line-height:18px}
+.banner{margin:10px 12px;border-radius:12px;padding:12px 14px;color:#fff;
+ background:linear-gradient(135deg,#D92B2B,#A81515);box-shadow:0 4px 12px rgba(180,30,30,.22)}
+.banner.o{background:linear-gradient(135deg,#E8590C,#C2410C)}
+/* 弹层 */
+.mask{position:absolute;inset:0;background:rgba(15,25,40,.45);display:flex;align-items:flex-end;justify-content:center;z-index:50}
+.sheet{width:100%;background:#fff;border-radius:16px 16px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom));max-height:80%;overflow-y:auto}
+.sheet h3{margin:0 0 4px;font-size:17px;text-align:center}
+.sheet .sub{text-align:center;color:#8A94A6;font-size:12px;margin-bottom:14px}
+.dialog{width:290px;background:#fff;border-radius:14px;padding:20px 18px 14px;text-align:center}
+.dialog h3{margin:0 0 8px;font-size:16px}
+.dialog p{margin:0 0 16px;font-size:13px;color:#6B7688;line-height:20px}
+.toast{position:absolute;left:50%;top:52%;transform:translate(-50%,-50%);background:rgba(20,28,44,.9);color:#fff;
+ padding:10px 18px;border-radius:10px;font-size:13px;z-index:99;max-width:280px;text-align:center;line-height:20px}
+.opt{display:flex;align-items:center;gap:10px;padding:12px 4px;border-bottom:1px solid #F1F4F9}
+.opt .rk{margin-left:auto;width:20px;height:20px;border-radius:50%;border:1.5px solid #C6CFDC}
+.opt.on .rk{border-color:#1668DC;background:#1668DC;position:relative}
+.opt.on .rk::after{content:"";position:absolute;left:6px;top:3px;width:5px;height:9px;border:2px solid #fff;border-top:0;border-left:0;transform:rotate(42deg)}
+/* 空态 */
+.empty{text-align:center;padding:48px 20px;color:#A6AEBC;font-size:13px}
+.empty .ic{margin-bottom:10px}
+/* 分段 */
+.seg{display:flex;background:#fff;padding:8px 12px;gap:6px;position:sticky;top:0;z-index:5;border-bottom:1px solid #F1F4F9}
+.seg div{flex:1;text-align:center;padding:7px 0;border-radius:8px;font-size:13px;color:#4A5666;background:#F4F6FA}
+.seg div.on{background:#E8F1FE;color:#1668DC;font-weight:600}
+.badge{display:inline-block;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#D92B2B;color:#fff;
+ font-size:10px;line-height:16px;text-align:center;font-weight:600}
+.kv{display:flex;justify-content:space-between;padding:7px 0;font-size:13px}
+.kv .k{color:#8A94A6;flex:0 0 96px}
+.kv .v{flex:1;text-align:right;color:#1B2430}
+.loginbg{background:linear-gradient(160deg,#0F4C9B 0%,#1668DC 45%,#6FA8F5 100%);height:100%;display:flex;flex-direction:column;
+ align-items:center;padding:52px 28px 28px;color:#fff}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="screen">
+    <div class="statusbar" id="statusbar">
+      <span id="sbtime">08:44</span>
+      <span class="sb-r">
+        <svg width="16" height="10" viewBox="0 0 16 10" fill="#fff"><rect x="0" y="6" width="3" height="4" rx="1"/><rect x="4.5" y="4" width="3" height="6" rx="1"/><rect x="9" y="2" width="3" height="8" rx="1"/><rect x="13.5" y="0" width="3" height="10" rx="1" opacity=".45"/></svg>
+        <svg width="16" height="10" viewBox="0 0 16 10" fill="#fff"><path d="M8 9.2L5.4 6.6C4 5.2 2 4.6 0.6 4.3A9 9 0 0115.4 4.3c-1.4.3-3.4.9-4.8 2.3L8 9.2z" opacity=".9"/></svg>
+        <span style="display:flex;align-items:center"><svg width="22" height="11" viewBox="0 0 22 11"><rect x="0" y="1" width="18" height="9" rx="2.5" fill="none" stroke="#fff" stroke-opacity=".7"/><rect x="2" y="3" width="11" height="5" rx="1" fill="#fff"/><rect x="19.5" y="4" width="2" height="3" rx="1" fill="#fff" fill-opacity=".6"/></svg></span>
+      </span>
+    </div>
+    <div class="navbar" id="navbar"></div>
+    <div class="view" id="view"></div>
+    <div id="actionbar"></div>
+    <div class="tabbar" id="tabbar"></div>
+    <div id="layer"></div>
+  </div>
+</div>
+<div id="flowmap"></div>
+
+<script>
+/* ==================== 图标 ==================== */
+var ICONS={
+ back:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+ more:'<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>',
+ bell:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8a6 6 0 10-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10.3 21a2 2 0 003.4 0"/></svg>',
+ home:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 10.5L12 3l9 7.5"/><path d="M5.5 9.6V20h13V9.6"/><path d="M9.5 20v-6h5v6"/></svg>',
+ warn:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3.5L1.8 20.5h20.4L12 3.5z"/><path d="M12 10v4.5"/><path d="M12 17.6v.01"/></svg>',
+ task:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3.5" width="16" height="17" rx="2.5"/><path d="M8 9h8M8 13h8M8 17h4"/></svg>',
+ user:'<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c1.4-3.6 4-5.4 7.5-5.4S18.1 16.4 19.5 20"/></svg>',
+ plus:'<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+ flame:'<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1.2 3.4-1 4.6-2.4 6.4C8 10.5 7 12.4 7 14.6A5 5 0 0012 21a5 5 0 005-6.4c0-3.3-2.3-4.7-3.2-7.3-.5 1.6-1.5 2.3-2.3 2.6.5-3.3.2-6.1-.5-7.9z"/></svg>',
+ cam:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8A94A6" stroke-width="1.8" stroke-linejoin="round"><path d="M3 7.5h4l1.5-2.5h7L17 7.5h4v11H3z"/><circle cx="12" cy="13" r="3.2"/></svg>',
+ loc:'<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-3.9 0-7 3.1-7 7 0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7zm0 9.6A2.6 2.6 0 1112 6.4a2.6 2.6 0 010 5.2z"/></svg>',
+ clock:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5.4l3.4 2"/></svg>',
+ right:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C6CFDC" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>',
+ phone:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M5 4h3.5l1.6 4-2.2 1.6a12 12 0 006.5 6.5L16 13.9l4 1.6V19c0 1-.9 1.8-1.9 1.7C10.4 20 4 13.6 3.3 5.9 3.2 4.9 4 4 5 4z"/></svg>',
+ check:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5.5 5.5L20 6.5"/></svg>',
+ doc:'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#C6CFDC" stroke-width="1.6" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>'
+};
+
+/* ==================== 模拟数据（演示虚构） ==================== */
+var LV={blue:{t:'火险·蓝色',c:'lv-blue'},yellow:{t:'火险·黄色',c:'lv-yellow'},orange:{t:'火险·橙色',c:'lv-orange'},red:{t:'火险·红色',c:'lv-red'}};
+var OLV={yellow:{t:'工单·黄色',c:'lv-yellow'},orange:{t:'工单·橙色',c:'lv-orange'},red:{t:'工单·红色',c:'lv-red'}};
+var ST={signals:{t:'待研判',c:'lv-gray'},judging:{t:'研判中',c:'lv-blue'},approving:{t:'待审批',c:'lv-red'},
+ dispatching:{t:'待派发',c:'lv-blue'},signing:{t:'待签收',c:'lv-orange'},working:{t:'处置中',c:'lv-orange'},
+ checking:{t:'待核查',c:'lv-blue'},done:{t:'已办结',c:'lv-gray'},archived:{t:'已归档',c:'lv-gray'},falseAlarm:{t:'误报解除',c:'lv-gray'}};
+
+var ROLES=[
+ {k:'zhiban',n:'王建国',r:'乡镇值班室',o:'灵乡镇人民政府',tabs:['judge','sign','feedback','check','all'],desc:'统一责任节点：签收 / 进展反馈 / 结果报告'},
+ {k:'duizhang',n:'李大山',r:'村应急扑火小分队队长',o:'灵乡镇大畈村',tabs:['sign','feedback','all'],desc:'15 分钟到场先期处置、现场反馈'},
+ {k:'jiuyuan',n:'张锋',r:'市综合应急救援大队',o:'大冶市应急管理局',tabs:['sign','feedback','all'],desc:'红色工单 60 分钟到场增援'},
+ {k:'zhishou',n:'周敏',r:'市指挥中心值守员',o:'大冶市应急管理局',tabs:['judge','sign','check','all'],desc:'5 分钟研判、派发、核查销号'},
+ {k:'lingdao',n:'陈志远',r:'带班领导',o:'大冶市应急管理局',tabs:['approve','all'],desc:'红色工单审批、超时督办接收'},
+ {k:'hulin',n:'刘光华',r:'护林员',o:'灵乡镇林业站',tabs:['all'],desc:'人工巡护发现上报、工单到达前先行核实'}
+];
+
+/* 每 30 分钟进展 / 5 分钟签收 等时限用相对秒数模拟，页面加载即开始倒计时 */
+function dl(sec){return Date.now()+sec*1000}
+var ORDERS=[
+ {id:'HY20261023001',lv:'red',st:'working',title:'黄坪山林区大畈村东山坳火情',area:'灵乡镇',place:'黄坪山林区大畈村东山坳（北纬30.1036 东经114.9583）',
+  src:'视频烟火识别 · 灵乡林场3号卡口',area0:'3.2 亩（初判）',dir:'东北向',weather:'晴 · 东北风 3 级 · 26℃ · 湿度 38%',suggest:'红色',
+  create:'2026-10-23 08:24',dispatch:'2026-10-23 08:26',sign:'2026-10-23 08:29',arrive:'2026-10-23 08:41',
+  dlFeedback:dl(1120),dlResp:dl(13320),dlReport:0,
+  signals:[{t:'08:12',s:'视频烟火识别',d:'灵乡林场3号卡口 AI 识别疑似火点，置信度 0.92'},
+           {t:'08:20',s:'卫星遥感热点',d:'湖北省卫星热点服务平台推送热点 1 处，距上条 120 米'},
+           {t:'08:26',s:'护林员上报',d:'刘光华 移动端上报：东山坳有明火，约 2 亩'}],
+  events:[{t:'08:24',b:'市指挥中心 周敏',x:'研判确认为预警，生成火情工单（建议等级：红色）'},
+          {t:'08:26',b:'市指挥中心 周敏',x:'带班领导已审批 → 分级派发至灵乡镇值班室、大畈村小分队、市救援大队（短信+移动端双推送）'},
+          {t:'08:29',b:'灵乡镇值班室 王建国',x:'已回复收到（用时 3 分 12 秒，未超时）'},
+          {t:'08:41',b:'大畈村小分队 李大山',x:'已到场打卡，扑救力量 12 人，明火约 3 亩，东北风 3 级'},
+          {t:'09:02',b:'灵乡镇值班室 王建国',x:'进展更新：开设隔离带 80 米，明火控制中，请求市救援大队增援'}],
+  advice:['乡镇主要领导、分管领导立即赶赴现场指挥','市综合应急救援大队 60 分钟内到场增援','市资规局（林业）派员认定地类与过火面积',
+          '每 30 分钟向市指挥中心反馈一次进展','明火扑灭后 30 分钟内提交结果报告','对外首报须在 20 分钟内完成（8 号文法定时限）',
+          '6 小时未扑灭 → 建议启动 Ⅳ 级应急响应'],
+  dispatchees:['灵乡镇值班室','大畈村应急扑火小分队','市综合应急救援大队','市资规局（林业）']},
+
+ {id:'HY20261023002',lv:'orange',st:'signing',title:'小雷山南麓茶场边火情',area:'陈贵镇',place:'小雷山南麓（北纬30.0912 东经114.8741）',
+  src:'群众举报 · 12345 转办',area0:'0.8 亩（初判）',dir:'西南向',weather:'晴 · 西南风 2 级 · 25℃ · 湿度 42%',suggest:'橙色',
+  create:'2026-10-23 08:33',dispatch:'2026-10-23 08:35',sign:'',arrive:'',
+  dlSign:dl(252),dlFeedback:0,dlReport:0,
+  signals:[{t:'08:30',s:'群众举报',d:'12345 转办：小雷山方向有浓烟'},
+           {t:'08:32',s:'视频烟火识别',d:'小雷山卡口复核确认存在烟点'}],
+  events:[{t:'08:33',b:'市指挥中心 周敏',x:'研判确认为预警，生成火情工单（建议等级：橙色）'},
+          {t:'08:35',b:'市指挥中心 周敏',x:'分级派发至陈贵镇值班室、小雷山村小分队、市资规局（短信+移动端双推送，均已送达）'}],
+  advice:['乡镇分管领导赶赴现场','半专业扑火队 30 分钟内到场','每 30 分钟反馈一次进展','市资规局（林业）同步接收工单'],
+  dispatchees:['陈贵镇值班室','小雷山村应急扑火小分队','市资规局（林业）']},
+
+ {id:'HY20261023003',lv:'yellow',st:'working',title:'天台山北麓荒坡杂草火',area:'殷祖镇',place:'天台山北麓荒坡（北纬30.1452 东经114.7986）',
+  src:'物联感知 · 天台山烟感 07 号',area0:'0.3 亩（初判）',dir:'无明显蔓延',weather:'多云 · 北风 2 级 · 24℃ · 湿度 51%',suggest:'黄色',
+  create:'2026-10-23 07:52',dispatch:'2026-10-23 07:53',sign:'2026-10-23 07:56',arrive:'2026-10-23 08:06',
+  dlFeedback:0,dlReport:dl(1310),
+  signals:[{t:'07:50',s:'物联感知',d:'天台山烟感 07 号触发报警'}],
+  events:[{t:'07:52',b:'平台自动',x:'自动研判生成工单（等级：黄色，平台自动派发）'},
+          {t:'07:56',b:'殷祖镇值班室 赵强',x:'已回复收到'},
+          {t:'08:06',b:'天台山村小分队 孙勇',x:'已到场打卡，杂草火已控制'},
+          {t:'08:38',b:'天台山村小分队 孙勇',x:'进展更新：明火已扑灭，正在清理烟点，留守 2 人看护'}],
+  advice:['村应急扑火小分队 15 分钟内到场先期处置','每 30 分钟反馈一次进展','明火扑灭后 30 分钟内提交结果报告'],
+  dispatchees:['殷祖镇值班室','天台山村应急扑火小分队']},
+
+ {id:'HY20261023004',lv:'red',st:'approving',title:'龙角山主峰东侧林火',area:'金牛镇',place:'龙角山主峰东侧（北纬30.0708 东经114.7032）',
+  src:'卫星遥感热点 · 省平台',area0:'5.6 亩（初判）',dir:'东南向',weather:'晴 · 东南风 4 级 · 27℃ · 湿度 31%',suggest:'红色',
+  create:'2026-10-23 08:40',dispatch:'',sign:'',arrive:'',dlApprove:dl(168),
+  signals:[{t:'08:36',s:'卫星遥感热点',d:'省卫星热点服务平台：龙角山主峰东侧热点 2 处'},
+           {t:'08:39',s:'视频烟火识别',d:'龙角山卡口确认明火，火线约 60 米'}],
+  events:[{t:'08:40',b:'市指挥中心 周敏',x:'研判确认为预警，生成火情工单（建议等级：红色）→ 已提交带班领导审批'}],
+  advice:['待带班领导审批后 3 分钟内完成派发','乡镇主要领导到场，市救援大队 60 分钟到场','每 30 分钟反馈进展，首报 20 分钟内完成'],
+  dispatchees:[]},
+
+ {id:'HY20261022015',lv:'orange',st:'checking',title:'大王山西坡林地火',area:'保安镇',place:'大王山西坡（北纬30.1288 东经114.9256）',
+  src:'人工巡护上报 · 护林员',area0:'认定 1.9 亩',dir:'西向',weather:'晴 · 西风 3 级 · 25℃ · 湿度 40%',suggest:'橙色',
+  create:'2026-10-22 15:12',dispatch:'2026-10-22 15:14',sign:'2026-10-22 15:17',arrive:'2026-10-22 15:38',
+  report:{time:'2026-10-22 16:42',area:'1.9 亩',type:'有林地（马尾松）',cause:'祭祀用火',force:'保安镇半专业队 18 人 · 镇村干部 6 人',hurt:'无人员伤亡',guard:'保安镇 2 人留守看护'},
+  signals:[{t:'15:08',s:'人工巡护上报',d:'护林员 吴德明 上报：大王山西坡有烟'}],
+  events:[{t:'15:12',b:'市指挥中心 周敏',x:'生成工单（等级：橙色）'},
+          {t:'15:17',b:'保安镇值班室 何斌',x:'已回复收到'},
+          {t:'15:38',b:'保安镇半专业队 何斌',x:'已到场打卡，20 人扑救'},
+          {t:'16:06',b:'保安镇值班室 何斌',x:'进展更新：明火基本控制'},
+          {t:'16:42',b:'保安镇值班室 何斌',x:'提交结果报告：过火面积 1.9 亩，起火原因初判为祭祀用火'}],
+  advice:['等待市应急局核查（图核 / 电话 / 现场）','核查不通过将被退回重办'],
+  dispatchees:['保安镇值班室','大王山村应急扑火小分队']},
+
+ {id:'HY20261022009',lv:'yellow',st:'archived',title:'猫儿山脚荒草火',area:'茗山乡',place:'猫儿山脚（北纬30.1610 东经114.8470）',
+  src:'视频烟火识别 · 智慧国土',area0:'认定 0.5 亩',dir:'无蔓延',weather:'晴 · 静风 · 23℃ · 湿度 55%',suggest:'黄色',
+  create:'2026-10-22 10:02',dispatch:'2026-10-22 10:03',sign:'2026-10-22 10:05',arrive:'2026-10-22 10:14',
+  report:{time:'2026-10-22 10:48',area:'0.5 亩',type:'荒草地',cause:'农事用火（烧荒）',force:'茗山乡扑火队 9 人',hurt:'无人员伤亡',guard:'已清理烟点，无需留守'},
+  signals:[{t:'10:00',s:'视频烟火识别',d:'智慧国土摄像头识别烟点'}],
+  events:[{t:'10:02',b:'平台自动',x:'自动研判生成工单（黄色）'},
+          {t:'10:05',b:'茗山乡值班室 郑丽',x:'已回复收到'},
+          {t:'10:14',b:'猫儿山村小分队 周涛',x:'已到场打卡'},
+          {t:'10:48',b:'茗山乡值班室 郑丽',x:'提交结果报告：过火面积 0.5 亩'},
+          {t:'11:20',b:'市指挥中心 周敏',x:'图核通过 → 办结销号 → 自动归档（保存 ≥3 年）'}],
+  advice:['已办结归档，只读'],
+  dispatchees:['茗山乡值班室','猫儿山村应急扑火小分队']}
+];
+
+var SIGNALS=[
+ {id:'XH20261023008',t:'08:42',src:'无人机巡航',d:'殷祖镇南山头发现疑似烟点，可见程度中等',area:'殷祖镇',place:'南山头（北纬30.1388 东经114.8102）',lv:'orange'},
+ {id:'XH20261023007',t:'08:39',src:'群众举报',d:'12345 转办：还地桥镇屏山村后山有烧荒',area:'还地桥镇',place:'屏山村后山（北纬30.1712 东经114.7194）',lv:'yellow'},
+ {id:'XH20261023006',t:'08:37',src:'物联感知',d:'刘仁八镇八角亭烟感 12 号触发',area:'刘仁八镇',place:'八角亭林区（北纬30.0521 东经114.7520）',lv:'yellow'}
+];
+
+var RISK=[{id:'FXYJ20261023',lv:'orange',pub:'市气象局 · 市森防办',time:'2026-10-23 08:00',span:'未来 24 小时',
+ area:'全市（重点：灵乡、陈贵、殷祖、金牛、茗山）',
+ ms:['严禁野外用火，林区实行封山管理','各乡镇半专业扑火队进入待战状态','护林员加密巡护频次，重点时段 10:00—16:00','应急、林业、消防 24 小时值班值守','扑火物资装备前置到重点村']},
+ {id:'FXYJ20261021',lv:'yellow',pub:'市气象局 · 市森防办',time:'2026-10-21 08:00',span:'已解除',
+ area:'全市',ms:['加强林区巡查','村村响广播每日播报防火提示']}];
+
+var RESP=[{id:'Ⅳ-20260318',lv:'4',name:'天台山森林火灾 Ⅳ 级响应',time:'2026-03-18 14:20',st:'已终止',
+ d:'因明火 6 小时未扑灭启动，市森防指宣布，2026-03-19 09:10 终止'}];
+
+var MSGS=[
+ {id:1,type:'工单',t:'08:41',title:'【工单·红色】HY20261023001 已到场',d:'大畈村小分队李大山已到场打卡，明火约 3 亩，东北风 3 级。',oid:'HY20261023001',unread:1},
+ {id:2,type:'工单',t:'08:35',title:'【工单·橙色】HY20261023002 待签收',d:'陈贵镇小雷山南麓火情工单已派发，请在 5 分钟内回复收到。',oid:'HY20261023002',unread:1},
+ {id:3,type:'审批',t:'08:40',title:'【待审批】HY20261023004 红色工单',d:'龙角山主峰东侧林火，建议等级红色，请带班领导审批。',oid:'HY20261023004',unread:1},
+ {id:4,type:'预警',t:'08:00',title:'【火险·橙色】今日森林火险预警',d:'大冶市森林火险等级橙色，未来 24 小时，严禁野外用火。',oid:'',unread:0},
+ {id:5,type:'系统',t:'07:30',title:'值班提醒',d:'您今日值班（08:00—20:00），请确保移动端在线、定位权限已开启。',oid:'',unread:0}
+];
+
+var MYREPORTS=[
+ {id:'SB20261022007',t:'2026-10-22 09:14',type:'秸秆焚烧隐患',area:'灵乡镇大畈村',st:'已办结',d:'发现村民在林区边缘焚烧秸秆，已现场劝阻并上报。',oid:''},
+ {id:'SB20261021003',t:'2026-10-21 15:40',type:'林区隐患',area:'灵乡镇黄坪山',st:'已转工单',d:'进山路口防火检查点无人值守，建议增设卡点。',oid:'HY20261021012'}
+];
+
+/* ==================== 状态 ==================== */
+var S={page:'login',param:null,stack:[],role:'zhiban',tmpRole:'',tab:'home',seg:{warn:0,todo:0,msg:0},
+ form:{login:{mode:'pwd'},report:{type:'火情',area:'灵乡镇',desc:'',photo:0,urgent:'一般',loc:''},
+       fb:{type:'进展更新',desc:'',photo:0,next:'',loc:''},
+       rr:{area:'',type:'有林地',cause:'待调查',force:'',guard:'',photo:0},
+       verify:{way:'图核',res:''},judge:{},dispatch:{sel:['灵乡镇值班室','大畈村应急扑火小分队']}}};
+
+function me(){for(var i=0;i<ROLES.length;i++){if(ROLES[i].k===S.role)return ROLES[i]}return ROLES[0]}
+function O(id){for(var i=0;i<ORDERS.length;i++){if(ORDERS[i].id===id)return ORDERS[i]}return null}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function cdText(ms){
+  if(ms==null)return '—';
+  var s=Math.floor(ms/1000);
+  if(s<0)return '已超时 '+Math.floor(-s/60)+' 分 '+(-s%60)+' 秒';
+  var h=Math.floor(s/3600),m=Math.floor(s%3600/60),ss=s%60;
+  var p=function(x){return x<10?'0'+x:''+x};
+  return h>0? (h+':'+p(m)+':'+p(ss)) : (p(m)+':'+p(ss));
+}
+
+/* ==================== 路由 ==================== */
+var TABS=[{k:'home',t:'首页',p:'home'},{k:'warn',t:'预警',p:'warn-list'},{k:'report',t:'上报',p:'report'},
+ {k:'todo',t:'待办',p:'todo'},{k:'mine',t:'我的',p:'mine'}];
+var PAGES={};
+function go(p,param){S.stack.push({p:S.page,param:S.param});S.page=p;S.param=param;render()}
+function back(){var s=S.stack.pop();if(s){S.page=s.p;S.param=s.param}else{goHome();return}render()}
+function tab(k){for(var i=0;i<TABS.length;i++){if(TABS[i].k===k){S.tab=k;S.page=TABS[i].p;S.param=null;S.stack=[];render();return}}}
+function goHome(){S.stack=[];S.page='home';S.tab='home';S.param=null;render()}
+
+/* ==================== 组件 ==================== */
+function toast(txt,ms){
+  var d=document.createElement('div');d.className='toast';d.innerHTML=txt;
+  document.getElementById('layer').appendChild(d);
+  setTimeout(function(){d.remove()},ms||1800);
+}
+function sheet(html,onMount){
+  var m=document.createElement('div');m.className='mask';
+  m.innerHTML='<div class="sheet">'+html+'</div>';
+  m.addEventListener('click',function(e){if(e.target===m)m.remove()});
+  document.getElementById('layer').appendChild(m);
+  if(onMount)onMount(m);
+}
+function dialog(o){
+  var m=document.createElement('div');m.className='mask';
+  m.style.alignItems='center';
+  m.innerHTML='<div class="dialog"><h3>'+esc(o.title)+'</h3><p>'+o.body+'</p>'+
+   '<div style="display:flex;gap:10px"><button class="btn '+(o.cancelCls||'ghost')+'" id="dlg-c">'+esc(o.cancel||'取消')+'</button>'+
+   '<button class="btn '+(o.okCls||'')+'" id="dlg-o">'+esc(o.ok||'确定')+'</button></div></div>';
+  m.addEventListener('click',function(e){if(e.target===m)m.remove()});
+  document.getElementById('layer').appendChild(m);
+  m.querySelector('#dlg-c').onclick=function(){m.remove();if(o.onCancel)o.onCancel()};
+  m.querySelector('#dlg-o').onclick=function(){m.remove();if(o.onOk)o.onOk(m)};
+}
+function closeTop(){var l=document.getElementById('layer');if(l.lastChild)l.lastChild.remove()}
+
+function photoGrid(n,onAdd,onDel){
+  var h='<div class="photos">';
+  for(var i=0;i<n;i++){
+    h+='<div class="ph" onclick="'+onDel+'('+i+')">'+
+      '<svg width="30" height="30" viewBox="0 0 24 24" fill="#fff" fill-opacity=".85"><path d="M3 18l5-6 4 4.5 3-3.5 6 7H3z"/><circle cx="17" cy="6.5" r="2"/></svg>'+
+      '<span class="del">×</span></div>';
+  }
+  if(n<6)h+='<div class="ph add" onclick="'+onAdd+'()">'+ICONS.cam+'<span>上传</span></div>';
+  return h+'</div>';
+}
+
+/* ==================== 页面：登录 ==================== */
+PAGES.login={title:'',tab:'',noNav:true,html:function(){
+ var m=S.form.login.mode;
+ var lgTab=function(key,txt){
+  var on=m===key;
+  return '<div style="flex:1;text-align:center;padding:14px 0 11px;font-size:14px;'+(on?
+   'color:#1668DC;font-weight:600;border-bottom:2px solid #1668DC':'color:#8A94A6')+
+   '" onclick="setLoginMode(\''+key+'\')">'+txt+'</div>';
+ };
+ var h='<div class="loginbg" style="height:100%;justify-content:center;padding:0 26px">';
+ h+='<div style="width:64px;height:64px;border-radius:18px;background:rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;margin-bottom:16px">'+
+    '<svg width="34" height="34" viewBox="0 0 24 24" fill="#fff"><path d="M12 2l8.5 3.8v5.4c0 4.8-3.6 8.3-8.5 9.8-4.9-1.5-8.5-5-8.5-9.8V5.8L12 2z"/></svg></div>';
+ h+='<div style="font-size:21px;font-weight:700;letter-spacing:.5px;text-align:center">大冶市城市智能预警平台</div>';
+ h+='<div style="width:100%;background:#fff;border-radius:14px;padding:2px 18px 20px;margin-top:34px;color:#1B2430">';
+ h+='<div style="display:flex;border-bottom:1px solid #EEF1F6">'+lgTab('pwd','账密登录')+lgTab('sms','手机号登录')+'</div>';
+ h+='<div style="margin-top:16px">';
+ if(m==='pwd'){
+  h+='<input id="lg-user" type="text" placeholder="请输入工号" style="width:100%;height:40px;font-size:15px;border-bottom:1px solid #EEF1F6;padding:2px 2px 10px;outline:none;background:transparent">';
+  h+='<div style="height:14px"></div>';
+  h+='<input id="lg-pwd" type="password" placeholder="请输入密码" style="width:100%;height:40px;font-size:15px;border-bottom:1px solid #EEF1F6;padding:2px 2px 10px;outline:none;background:transparent">';
+ }else{
+  h+='<input id="lg-phone" type="tel" maxlength="11" placeholder="请输入手机号" style="width:100%;height:40px;font-size:15px;border-bottom:1px solid #EEF1F6;padding:2px 2px 10px;outline:none;background:transparent">';
+  h+='<div style="display:flex;align-items:center;gap:10px;border-bottom:1px solid #EEF1F6;padding:2px 2px 10px">'+
+     '<input id="lg-sms" type="tel" maxlength="6" placeholder="短信验证码" style="flex:1;height:40px;font-size:15px;outline:none;background:transparent">'+
+     '<button id="lg-codebtn" class="btn-sm line" onclick="sendCode()">获取验证码</button></div>';
+ }
+ h+='<button class="btn" style="width:100%;flex:none;margin-top:22px;height:46px" onclick="loginSubmit()">登 录</button>';
+ h+='</div></div></div>';
+ return h;
+}};
+function setLoginMode(m){S.form.login.mode=m;render()}
+function sendCode(){
+ var ph=document.getElementById('lg-phone');
+ if(!/^1\d{10}$/.test(ph.value.trim())){toast('请输入正确的手机号');ph.focus();return}
+ var btn=document.getElementById('lg-codebtn'),n=60;
+ btn.disabled=true;btn.style.opacity=.55;btn.textContent=n+'s 后重发';
+ toast('验证码已发送（演示：任意 4 位数字）');
+ var iv=setInterval(function(){
+  n--;
+  if(n<=0){clearInterval(iv);btn.disabled=false;btn.style.opacity=1;btn.textContent='获取验证码'}
+  else{btn.textContent=n+'s 后重发'}
+ },1000);
+}
+function loginSubmit(){
+ var m=S.form.login.mode;
+ if(m==='pwd'){
+  var u=document.getElementById('lg-user'),pw=document.getElementById('lg-pwd');
+  if(!u.value.trim()){toast('请输入工号');u.focus();return}
+  if(!pw.value.trim()){toast('请输入密码');pw.focus();return}
+ }else{
+  var ph=document.getElementById('lg-phone'),cd=document.getElementById('lg-sms');
+  if(!/^1\d{10}$/.test(ph.value.trim())){toast('请输入正确的手机号');ph.focus();return}
+  if(!/^\d{4,6}$/.test(cd.value.trim())){toast('请输入短信验证码');cd.focus();return}
+ }
+ doLogin();
+}
+function doLogin(){S.page='home';S.tab='home';S.stack=[];render();toast('登录成功：'+me().r+' · '+me().n)}
+
+/* ==================== 页面：首页 ==================== */
+PAGES.home={title:'大冶市城市智能预警平台',tab:'home',right:'<span onclick="go(\'message\')" style="position:relative;display:flex">'+ICONS.bell+'<span class="badge" style="position:absolute;top:-2px;right:-4px">3</span></span>',html:function(){
+ var r=RISK[0],o1=O('HY20261023001'),m=me();
+ var unread=0;MSGS.forEach(function(x){if(x.unread)unread++});
+ var todoN=ORDERS.filter(function(o){return ['signing','working','checking','approving','dispatching'].indexOf(o.st)>=0}).length;
+ var h='';
+ /* 角色条 */
+ h+='<div style="background:linear-gradient(135deg,#0F4C9B,#1668DC);padding:10px 14px 14px;color:#fff">'+
+   '<div class="between"><div><div style="font-size:15px;font-weight:600">'+esc(m.n)+' <span class="tiny" style="opacity:.85">'+esc(m.r)+'</span></div>'+
+   '<div class="tiny" style="opacity:.8;margin-top:2px">'+esc(m.o)+' · 今日值班 08:00—20:00</div></div>'+
+   '<span class="lv" style="background:rgba(255,255,255,.18);color:#fff" onclick="roleSheet()">切换角色</span></div></div>';
+ /* 今日火险 */
+ h+='<div class="card" style="margin-top:-2px;cursor:pointer" onclick="go(\'risk-detail\',\''+r.id+'\')">'+
+   '<div class="between"><div class="row"><span class="lv '+LV[r.lv].c+'">'+LV[r.lv].t+'</span>'+
+   '<span class="b">今日森林火险预警</span></div><span class="tiny muted">08:00 发布</span></div>'+
+   '<div class="small muted mt8">发布单位：市气象局 · 市森防办｜有效期：'+esc(r.span)+'｜范围：全市</div>'+
+   '<div class="hr"></div>'+
+   '<div class="tiny" style="line-height:20px;color:#4A5666">'+
+     r.ms.slice(0,3).map(function(x,i){return (i+1)+'. '+esc(x)}).join('<br>')+
+     '<span style="color:#1668DC"> … 查看全部 5 项措施 ›</span></div>'+
+ '</div>';
+ /* 红色工单横幅 */
+ h+='<div class="banner" onclick="go(\'warn-detail\',\'HY20261023001\')">'+
+   '<div class="between"><span class="lv" style="background:rgba(255,255,255,.22);color:#fff">工单·红色 · 处置中</span>'+
+   '<span class="tiny">'+esc(o1.create)+'</span></div>'+
+   '<div style="font-size:15px;font-weight:600;margin-top:8px">'+esc(o1.title)+'</div>'+
+   '<div class="tiny" style="opacity:.9;margin-top:4px">'+esc(o1.area)+' · '+esc(o1.place)+'</div>'+
+   '<div class="between small" style="margin-top:10px;background:rgba(255,255,255,.14);border-radius:8px;padding:8px 10px">'+
+     '<span>距下次进展反馈</span><span class="cd" data-dl="'+o1.dlFeedback+'"></span></div>'+
+ '</div>';
+ /* 统计 + 快捷 */
+ h+='<div class="grid4">'+
+   '<div><div class="n" style="color:#D92B2B">1</div><div class="tiny muted">紧急待办</div></div>'+
+   '<div><div class="n" style="color:#E8590C">2</div><div class="tiny muted">处置中</div></div>'+
+   '<div><div class="n" style="color:#1668DC">1</div><div class="tiny muted">待核查</div></div>'+
+   '<div><div class="n" style="color:#1E9E63">5</div><div class="tiny muted">今日办结</div></div>'+
+ '</div>';
+ h+='<div class="card"><div class="row" style="gap:8px">'+
+   quick('report','现场巡查上报','plus')+
+   quick('todo','我的待办','task',todoN)+
+   /* 信号研判入口暂收起，后续需要时恢复本行
+   quick('signals','信号研判','warn',SIGNALS.length)+
+   */
+   '</div></div>';
+ /* 待办提醒 */
+ h+='<div class="sec-title">待办提醒<span class="more" onclick="tab(\'todo\')">全部 ›</span></div>';
+ h+='<div class="card nopad">';
+ var list=[O('HY20261023002'),O('HY20261023004'),O('HY20261022015')];
+ list.forEach(function(o,i){
+   var dl=o.st==='signing'?o.dlSign:(o.st==='approving'?o.dlApprove:null);
+   h+='<div class="li" onclick="go(\'warn-detail\',\''+o.id+'\')">'+
+     '<span class="lv '+OLV[o.lv].c+'" style="height:20px">'+OLV[o.lv].t+'</span>'+
+     '<div style="flex:1;min-width:0"><div class="b" style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(o.title)+'</div>'+
+     '<div class="tiny muted mt8">'+esc(o.id)+' · '+esc(o.area)+' · '+ST[o.st].t+
+     (dl?' · <span class="cd" data-dl="'+dl+'"></span>':'')+'</div></div>'+ICONS.right+'</div>';
+ });
+ h+='</div>';
+ /* 最新消息 */
+ h+='<div class="sec-title">最新消息<span class="more" onclick="go(\'message\')">全部 '+unread+' 条未读 ›</span></div>';
+ h+='<div class="card nopad">';
+ MSGS.slice(0,3).forEach(function(g){
+   h+='<div class="li" onclick="msgGo('+g.id+')">'+
+     '<span class="dot" style="background:'+(g.unread?'#D92B2B':'#D6DCE6')+';margin-top:6px"></span>'+
+     '<div style="flex:1;min-width:0"><div class="small b" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(g.title)+'</div>'+
+     '<div class="tiny muted mt8">'+esc(g.d)+'</div></div><span class="tiny muted">'+esc(g.t)+'</span></div>';
+ });
+ h+='</div><div style="height:8px"></div>';
+ return h;
+}};
+function quick(p,t,ic,n){
+ var svg=ic==='plus'?ICONS.plus:(ic==='task'?ICONS.task:(ic==='warn'?ICONS.warn:ICONS.doc));
+ return '<div style="flex:1;position:relative;display:flex;align-items:center;gap:10px;padding:10px;background:#F7F9FC;border-radius:10px" onclick="go(\''+p+'\')">'+
+  (n?'<span style="position:absolute;top:6px;right:8px;min-width:18px;height:18px;border-radius:9px;background:#D92B2B;color:#fff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;padding:0 5px">'+n+'</span>':'')+
+  '<span style="width:34px;height:34px;border-radius:9px;background:#E8F1FE;color:#1668DC;display:flex;align-items:center;justify-content:center;flex:none">'+svg+'</span>'+
+  '<div class="b" style="font-size:13px">'+esc(t)+'</div></div>';
+}
+function msgGo(id){
+ var g=null;MSGS.forEach(function(x){if(x.id===id)g=x});
+ if(!g)return;g.unread=0;
+ if(g.oid)go('warn-detail',g.oid);else toast(g.d,2200);
+}
+
+/* ==================== 页面：预警列表 ==================== */
+PAGES['warn-list']={title:'预警信息',tab:'warn',html:function(){
+ var i=S.seg.warn,h='<div class="seg">';
+ ['火险预警','工单预警','应急响应'].forEach(function(t,k){
+   h+='<div class="'+(i===k?'on':'')+'" onclick="setSeg(\'warn\','+k+')">'+t+'</div>';
+ });
+ h+='</div>';
+ if(i===0){
+  RISK.forEach(function(r){
+   h+='<div class="card" onclick="go(\'risk-detail\',\''+r.id+'\')">'+
+    '<div class="between"><div class="row"><span class="lv '+LV[r.lv].c+'">'+LV[r.lv].t+'</span>'+
+    '<span class="b">森林火险预警</span></div><span class="tiny muted">'+esc(r.time)+'</span></div>'+
+    '<div class="small muted mt8">'+esc(r.pub)+'｜'+esc(r.span)+'</div>'+
+    '<div class="small mt8" style="color:#4A5666">重点区域：'+esc(r.area)+'</div>'+
+    '<div class="tiny muted mt8">响应措施 '+r.ms.length+' 项 ›</div></div>';
+  });
+ }else if(i===1){
+  h+='<div class="card nopad">';
+  ORDERS.forEach(function(o){
+   var dl=o.st==='signing'?o.dlSign:(o.st==='working'?(o.dlReport||o.dlFeedback):(o.st==='approving'?o.dlApprove:null));
+   h+='<div class="li" style="position:relative;display:block;padding:8px 14px 10px" onclick="go(\'warn-detail\',\''+o.id+'\')">'+
+     '<span class="lv '+OLV[o.lv].c+'" style="position:absolute;top:8px;left:14px;height:20px">'+OLV[o.lv].t+'</span>'+
+     '<span class="lv '+ST[o.st].c+'" style="position:absolute;top:8px;right:14px;height:20px">'+ST[o.st].t+'</span>'+
+     '<div style="padding-top:26px">'+
+     '<div class="small b" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(o.title)+'</div>'+
+     '<div class="tiny muted mt8">'+esc(o.id)+' · '+esc(o.area)+' · 来源：'+esc(o.src)+'</div></div>'+
+     '<div class="tiny mt8" style="color:#4A5666">'+(dl?'限时：<span class="cd" data-dl="'+dl+'"></span>':'生成时间 '+esc(o.create))+'</div></div>';
+  });
+  h+='</div>';
+ }else{
+  h+='<div class="card"><div class="between"><span class="b">当前无进行中的应急响应</span><span class="lv lv-gray">Ⅳ~Ⅰ 级</span></div>'+
+   '<div class="small muted mt8">触发条件：红色工单 6 小时明火未扑灭 → 建议启动 Ⅳ 级响应；12/24/48 小时逐级升档。</div>'+
+   '<div class="tiny muted mt8" onclick="go(\'flow\')" style="color:#1668DC">查看响应衔接规则 ›</div></div>';
+  h+='<div class="sec-title">历史响应记录</div><div class="card nopad">';
+  RESP.forEach(function(r){
+   h+='<div class="li"><span class="lv lv-resp">应急响应·Ⅳ级</span><div style="flex:1;min-width:0">'+
+    '<div class="small b">'+esc(r.name)+'</div><div class="tiny muted mt8">'+esc(r.time)+' · '+esc(r.st)+' · '+esc(r.d)+'</div></div></div>';
+  });
+  h+='</div>';
+ }
+ h+='<div style="height:8px"></div>';
+ return h;
+}};
+function setSeg(k,v){S.seg[k]=v;render()}
+
+/* ==================== 页面：火险预警详情 ==================== */
+PAGES['risk-detail']={title:'火险预警详情',html:function(){
+ var r=null;RISK.forEach(function(x){if(x.id===S.param)r=x});if(!r)r=RISK[0];
+ var h='<div class="card"><div class="between"><div class="row"><span class="lv '+LV[r.lv].c+'" style="height:22px;font-size:12px">'+LV[r.lv].t+'</span>'+
+  '<span class="b" style="font-size:15px">大冶市森林火险预警</span></div><span class="tiny muted">'+esc(r.id)+'</span></div>'+
+  '<div class="hr"></div>'+
+  '<div class="kv"><span class="k">发布单位</span><span class="v">'+esc(r.pub)+'</span></div>'+
+  '<div class="kv"><span class="k">发布时间</span><span class="v">'+esc(r.time)+'</span></div>'+
+  '<div class="kv"><span class="k">有效期</span><span class="v">'+esc(r.span)+'</span></div>'+
+  '<div class="kv"><span class="k">影响范围</span><span class="v">'+esc(r.area)+'</span></div>'+
+  '</div>';
+ h+='<div class="sec-title">分级响应措施（'+r.ms.length+' 项）</div><div class="card">';
+ r.ms.forEach(function(x,i){h+='<div class="small" style="padding:6px 0;line-height:20px">'+(i+1)+'. '+esc(x)+'</div>'});
+ h+='</div>';
+ return h;
+}};
+
+/* ==================== 页面：工单详情（闭环中枢） ==================== */
+PAGES['warn-detail']={title:'工单详情',right:'<span onclick="go(\'flow\')">流程</span>',html:function(){
+ var o=O(S.param)||ORDERS[0];
+ var h='<div style="background:linear-gradient(135deg,'+(o.lv==='red'?'#D92B2B,#A81515':(o.lv==='orange'?'#E8590C,#C2410C':'#E8951A,#C97A08'))+');padding:14px;color:#fff">'+
+  '<div class="between"><span class="lv" style="background:rgba(255,255,255,.2);color:#fff">'+OLV[o.lv].t+'</span>'+
+  '<span class="tiny">'+esc(o.id)+'</span></div>'+
+  '<div style="font-size:16px;font-weight:600;margin-top:8px">'+esc(o.title)+'</div>'+
+  '<div class="tiny" style="opacity:.92;margin-top:6px">'+esc(o.area)+' · '+esc(o.place)+'</div>'+
+  '<div class="between" style="margin-top:10px"><span class="small">当前状态：'+ST[o.st].t+'</span>'+
+  '<span class="tiny">建议等级：'+esc(o.suggest)+'</span></div></div>';
+ /* 时限条 */
+ h+='<div class="card"><div class="b small">时限监控（内部工单轨）</div>';
+ var rows=[];
+ if(o.st==='approving')rows.push(['带班领导审批（3 分钟）',o.dlApprove]);
+ if(o.dispatch)rows.push(['派发',null,'已完成 '+o.dispatch]);
+ if(o.dlSign)rows.push(['乡镇值班室签收（5 分钟）',o.dlSign]);
+ if(o.arrive)rows.push(['到场',null,'已完成 '+o.arrive]);
+ if(o.dlFeedback)rows.push(['下次进展反馈（每 30 分钟）',o.dlFeedback]);
+ if(o.dlReport)rows.push(['结果报告（扑灭后 30 分钟）',o.dlReport]);
+ if(o.lv==='red')rows.push(['红色工单升响应（6 小时）',o.dlResp]);
+ if(!rows.length)rows.push(['全流程已完成',null,'已归档']);
+ rows.forEach(function(r){
+  h+='<div class="kv"><span class="k">'+r[0]+'</span><span class="v">'+(r[1]?'<span class="cd" data-dl="'+r[1]+'"></span>':'<span style="color:#1E9E63">'+r[2]+'</span>')+'</span></div>';
+ });
+ h+='<div class="hr"></div><div class="tiny muted">并行轨：对外法定报告（8 号文）—— 首报 20 分钟内、续报每 30 分钟、卫星热点核查 30 分钟，与内部计时互不覆盖。</div></div>';
+ /* 七要素 */
+ h+='<div class="sec-title">工单要素</div><div class="card">'+
+  '<div class="kv"><span class="k">预警类型</span><span class="v">森林火情</span></div>'+
+  '<div class="kv"><span class="k">信息来源</span><span class="v">'+esc(o.src)+'</span></div>'+
+  '<div class="kv"><span class="k">过火面积初判</span><span class="v">'+esc(o.area0)+'</span></div>'+
+  '<div class="kv"><span class="k">蔓延方向</span><span class="v">'+esc(o.dir)+'</span></div>'+
+  '<div class="kv"><span class="k">天气风力</span><span class="v">'+esc(o.weather)+'</span></div>'+
+  '<div class="kv"><span class="k">建议响应等级</span><span class="v"><span class="lv '+OLV[o.lv].c+'">'+OLV[o.lv].t+'</span></span></div>'+
+  '<div class="kv"><span class="k">派发对象</span><span class="v">'+(o.dispatchees.length?esc(o.dispatchees.join('、')):'<span class="muted">未派发</span>')+'</span></div>'+
+  '</div>';
+ /* 处置建议 */
+ h+='<div class="sec-title">处置建议（按'+OLV[o.lv].t+'）</div><div class="card">';
+ o.advice.forEach(function(a,i){h+='<div class="small" style="padding:5px 0;line-height:20px;color:#33404F">'+ICONS.check.replace('<svg','<svg style="vertical-align:-3px;margin-right:6px;color:#1668DC"')+' '+esc(a)+'</div>'});
+ h+='</div>';
+ /* 关联信号 */
+ h+='<div class="sec-title">关联信号（'+o.signals.length+' 条，已合并）</div><div class="card nopad">';
+ o.signals.forEach(function(s){
+  h+='<div style="padding:10px 14px;border-bottom:1px solid #F1F4F9"><div class="between"><span class="small b">'+esc(s.s)+'</span><span class="tiny muted">'+esc(s.t)+'</span></div>'+
+   '<div class="tiny muted mt8">'+esc(s.d)+'</div></div>';
+ });
+ h+='</div><div class="tipbar">去重规则：同点位（距离阈值）+ 同类型 + 时间窗 30 分钟 自动合并为主工单，其余作为关联信号保留</div>';
+ /* 结果报告 */
+ if(o.report){
+  h+='<div class="sec-title">结果报告</div><div class="card">'+
+   '<div class="kv"><span class="k">扑灭时间</span><span class="v">'+esc(o.report.time)+'</span></div>'+
+   '<div class="kv"><span class="k">过火面积认定</span><span class="v">'+esc(o.report.area)+'</span></div>'+
+   '<div class="kv"><span class="k">地类</span><span class="v">'+esc(o.report.type)+'</span></div>'+
+   '<div class="kv"><span class="k">起火原因初判</span><span class="v">'+esc(o.report.cause)+'</span></div>'+
+   '<div class="kv"><span class="k">参与力量</span><span class="v">'+esc(o.report.force)+'</span></div>'+
+   '<div class="kv"><span class="k">人员伤亡</span><span class="v">'+esc(o.report.hurt)+'</span></div>'+
+   '<div class="kv"><span class="k">留守看护</span><span class="v">'+esc(o.report.guard)+'</span></div></div>';
+ }
+ /* 时间轴 */
+ h+='<div class="sec-title">处置流程记录</div><div class="card"><div class="tl">';
+ o.events.forEach(function(e,i){
+  h+='<div class="tl-item'+(i===o.events.length-1?' now':'')+'"><div class="between"><span class="small b">'+esc(e.x)+'</span></div>'+
+   '<div class="tiny muted mt8">'+esc(e.t)+' · '+esc(e.b)+'</div></div>';
+ });
+ h+='</div></div><div style="height:8px"></div>';
+ return h;
+},
+bar:function(){
+ var o=O(S.param)||ORDERS[0],m=me();
+ if(o.st==='approving'){
+  return '<button class="btn danger" onclick="actApprove(\''+o.id+'\')">带班领导审批</button>';
+ }
+ if(o.st==='dispatching'){
+  return '<button class="btn" onclick="actDispatch(\''+o.id+'\')">分级派发</button>';
+ }
+ if(o.st==='signing'){
+  return '<button class="btn ghost" onclick="actSignTip(\''+o.id+'\')">退回说明</button><button class="btn" onclick="actSign(\''+o.id+'\')">接单确认（回复收到）</button>';
+ }
+ if(o.st==='working'){
+  var b='<button class="btn ghost" onclick="actArrive(\''+o.id+'\')">到场打卡</button>'+
+        '<button class="btn" onclick="go(\'feedback\',\''+o.id+'\')">进展反馈</button>';
+  if(o.dlReport)b='<button class="btn ghost" onclick="go(\'result-report\',\''+o.id+'\')">补照片</button>'+b;
+  return '<button class="btn warn" style="flex:0 0 46px" onclick="actSupport(\''+o.id+'\')">支援</button>'+b;
+ }
+ if(o.st==='checking'){return '<button class="btn" onclick="go(\'verify\',\''+o.id+'\')">市局核查</button>'}
+ if(o.st==='done'||o.st==='archived'){return '<button class="btn ghost" onclick="toast(\'已归档工单只读，变更需留痕\')">已归档（只读）</button>'}
+ return '';
+}};
+
+/* --- 工单动作 --- */
+function nowTime(){var d=new Date(),p=function(x){return x<10?'0'+x:''+x};
+ return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes())}
+function pushEvent(o,x){o.events.push({t:nowTime().slice(11),b:me().r+' '+me().n,x:x})}
+
+function actSign(id){
+ var o=O(id);
+ dialog({title:'接单确认',body:'确认收到工单 <b>'+esc(id)+'</b>？<br>确认后即承担处置责任，需在规定时限内到场并每 30 分钟反馈进展。<br><span class="muted">剩余签收时间窗口内完成，超时将自动通知带班领导。</span>',
+  ok:'确认收到',onOk:function(){
+   o.st='working';o.sign=nowTime().slice(11);o.dlSign=0;
+   o.dlFeedback=dl(1800);o.dlArrive=dl(900);
+   pushEvent(o,'已回复收到（移动端确认，未超时）');
+   toast('已回复收到 · 短信与平台已同步');render();
+  }});
+}
+function actSignTip(){toast('如需退回请联系市指挥中心，工单原则上不退回')}
+function actArrive(id){
+ var o=O(id);
+ dialog({title:'到场打卡',body:'将获取当前定位作为到场位置：<br><b>'+esc(o.place)+'</b><br><span class="muted">乡镇 30 分钟 / 村 15 分钟 / 市救援大队 60 分钟到场计时</span>',
+  ok:'确认打卡',onOk:function(){
+   o.arrive=nowTime().slice(11);o.dlArrive=0;pushEvent(o,'已到场打卡（定位已记录，用时 12 分钟，未超时）');
+   toast('到场打卡成功 · 到场用时已记录');render();
+  }});
+}
+function actSupport(id){
+ var o=O(id);
+ sheet('<h3>申请支援 / 升级</h3><div class="sub">红色工单 6 小时未扑灭将建议启动 Ⅳ 级响应</div>'+
+  '<div class="opt" onclick="supportSel(this)"><div><div class="small b">请求市综合应急救援大队增援</div><div class="tiny muted">60 分钟内到场</div></div><span class="rk"></span></div>'+
+  '<div class="opt" onclick="supportSel(this)"><div><div class="small b">请求相邻乡镇半专业队跨区支援</div><div class="tiny muted">市指挥中心统一调度</div></div><span class="rk"></span></div>'+
+  '<div class="opt" onclick="supportSel(this)"><div><div class="small b">建议启动 Ⅳ 级应急响应</div><div class="tiny muted">'+(o.lv==='red'?'红色工单 6 小时未扑灭':'仅限红色工单')+'</div></div><span class="rk"></span></div>'+
+  '<div class="row mt16"><button class="btn ghost" onclick="closeTop()">取消</button><button class="btn" onclick="supportOk(\''+id+'\')">提交</button></div>');
+}
+function supportSel(el){var p=el.parentNode;for(var i=0;i<p.children.length;i++){p.children[i].querySelector('.rk')&&p.children[i].classList.remove('on')}el.classList.add('on')}
+function supportOk(id){
+ var o=O(id),els=document.querySelectorAll('#layer .opt.on');
+ var t=els.length?els[0].innerText.split('\n')[0]:'申请支援';
+ closeTop();pushEvent(o,'提交'+t+'（待市指挥中心确认）');
+ toast('已提交：'+t+'<br>市指挥中心将统一调度');render();
+}
+function actApprove(id){
+ var o=O(id);
+ sheet('<h3>红色工单审批</h3><div class="sub">'+esc(id)+' · 建议等级：红色 · 派发时限 3 分钟</div>'+
+  '<div class="card" style="margin:0 0 12px"><div class="kv"><span class="k">事发地点</span><span class="v">'+esc(o.place)+'</span></div>'+
+  '<div class="kv"><span class="k">过火面积初判</span><span class="v">'+esc(o.area0)+'</span></div>'+
+  '<div class="kv"><span class="k">天气风力</span><span class="v">'+esc(o.weather)+'</span></div></div>'+
+  '<div class="form-item" style="border:1px solid #EEF1F6;border-radius:10px;margin-bottom:12px"><span class="lab">审批意见</span>'+
+  '<span class="val"><textarea id="ap-txt" placeholder="请输入审批意见">同意派发，请灵乡镇立即组织力量扑救，市救援大队做好增援准备。</textarea></span></div>'+
+  '<div class="row"><button class="btn ghost" onclick="closeTop();toast(\'已驳回，工单退回值守研判\')">驳回</button>'+
+  '<button class="btn danger" onclick="approveOk(\''+id+'\')">同意并派发</button></div>');
+}
+function approveOk(id){
+ var o=O(id),txt=document.getElementById('ap-txt');
+ closeTop();o.st='dispatching';o.dlApprove=0;
+ pushEvent(o,'带班领导审批通过：'+(txt&&txt.value?txt.value:'同意派发'));
+ toast('审批通过 · 请在 3 分钟内完成派发');render();
+}
+function actDispatch(id){
+ var o=O(id);
+ var cand=['灵乡镇值班室','事发村应急扑火小分队','市综合应急救援大队','市资规局（林业）','市公安局','市消防救援大队'];
+ var h='<h3>分级派发</h3><div class="sub">'+OLV[o.lv].t+' · '+(o.lv==='red'?'审批后 3 分钟':(o.lv==='orange'?'值守 3 分钟':'平台自动 5 分钟'))+'内完成派发</div>';
+ cand.forEach(function(c,i){
+  h+='<div class="opt'+(i<2?' on':'')+'" onclick="this.classList.toggle(\'on\')"><div><div class="small b">'+esc(c)+'</div>'+
+   '<div class="tiny muted">短信 + 移动端双推送</div></div><span class="rk"></span></div>';
+ });
+ h+='<div class="tipbar" style="margin:12px 0">通知通道：短信（12379）+ 移动端推送 + 电话兜底。短信失败自动重发，5 分钟未签收电话兜底并通知带班领导。</div>'+
+  '<div class="row"><button class="btn ghost" onclick="closeTop()">取消</button><button class="btn" onclick="dispatchOk(\''+id+'\')">确认派发</button></div>';
+ sheet(h);
+}
+function dispatchOk(id){
+ var o=O(id),sel=[],els=document.querySelectorAll('#layer .opt.on');
+ for(var i=0;i<els.length;i++){sel.push(els[i].innerText.split('\n')[0])}
+ if(!sel.length){toast('请至少选择一个派发对象');return}
+ closeTop();o.st='signing';o.dispatch=nowTime().slice(11);o.dispatchees=sel;o.dlSign=dl(300);
+ pushEvent(o,'分级派发至 '+sel.join('、')+'（短信+移动端双推送，均已送达）');
+ toast('派发成功<br>通知已送达 '+sel.length+' 个单位');render();
+}
+
+/* ==================== 页面：待办 ==================== */
+PAGES.todo={title:'我的待办',tab:'todo',html:function(){
+ var segs=['全部','待审批','待签收','待反馈','待核查'],i=S.seg.todo,h='<div class="seg">';
+ segs.forEach(function(t,k){h+='<div class="'+(i===k?'on':'')+'" onclick="setSeg(\'todo\','+k+')">'+t+'</div>'});
+ h+='</div>';
+ var map={0:['signing','working','checking','approving','dispatching','done','archived'],1:['approving'],2:['signing'],3:['working'],4:['checking']};
+ var sts=map[i];
+ /* 待研判（值守研判）为 PC 端功能，移动端暂不展示；后续如需恢复，取消本段注释并把 segs/map 的索引同步加回
+ if(i===1){
+  h+='<div class="card nopad">';
+  SIGNALS.forEach(function(s){
+   h+='<div class="li" onclick="go(\'judge\',\''+s.id+'\')">'+
+    '<span class="lv '+OLV[s.lv].c+'" style="height:20px;align-self:flex-start;margin-top:2px">建议'+OLV[s.lv].t.slice(3)+'</span>'+
+    '<div style="flex:1;min-width:0"><div class="small b">'+esc(s.src)+' · '+esc(s.area)+'</div>'+
+    '<div class="tiny muted mt8">'+esc(s.d)+'</div>'+
+    '<div class="tiny mt8" style="color:#D92B2B">研判剩余 <span class="cd" data-dl="'+dl(280)+'"></span>（5 分钟）</div></div>'+ICONS.right+'</div>';
+  });
+  h+='</div><div class="tipbar">值守研判三分支：<b>确认预警</b>（生成火情工单）/ <b>待核查</b>（生成核查工单，属地 1 小时内反馈）/ <b>误报</b>（记录原因，解除预警）。</div>';
+  h+='<div style="height:8px"></div>';return h;
+ }
+ */
+
+ var list=ORDERS.filter(function(o){return sts.indexOf(o.st)>=0});
+ if(!list.length){h+='<div class="empty">'+ICONS.doc+'<div>暂无该状态工单</div></div>';return h}
+ h+='<div class="card nopad">';
+ list.forEach(function(o){
+  var dl=o.st==='signing'?o.dlSign:(o.st==='approving'?o.dlApprove:(o.st==='working'?(o.dlReport||o.dlFeedback):null));
+  var act=o.st==='signing'?'签收':(o.st==='approving'?'审批':(o.st==='checking'?'核查':(o.st==='working'?(o.dlReport?'结果报告':'进展反馈'):'查看')));
+  h+='<div class="li" style="position:relative;display:block;padding:8px 14px 10px">'+
+   '<span class="lv '+OLV[o.lv].c+'" style="position:absolute;top:8px;left:14px;height:20px">'+OLV[o.lv].t+'</span>'+
+   '<span class="lv '+ST[o.st].c+'" style="position:absolute;top:8px;right:14px;height:20px">'+ST[o.st].t+'</span>'+
+   '<div style="padding-top:26px" onclick="go(\'warn-detail\',\''+o.id+'\')">'+
+   '<div class="small b" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(o.title)+'</div>'+
+   '<div class="tiny muted mt8">'+esc(o.id)+' · '+esc(o.area)+'</div></div>'+
+   '<div class="between mt8">'+
+   '<span class="tiny" style="color:#4A5666">'+(dl?'限时 <span class="cd" data-dl="'+dl+'"></span>':'更新 '+esc((o.events[o.events.length-1]||{}).t||''))+'</span>'+
+   '<button class="btn-sm '+(act==='查看'?'gray':'pri')+'" onclick="todoAct(\''+o.id+'\',\''+act+'\')">'+act+'</button></div></div>';
+ });
+ h+='</div><div style="height:8px"></div>';
+ return h;
+}};
+function todoAct(id,act){
+ if(act==='签收')actSign(id);
+ else if(act==='审批')actApprove(id);
+ else if(act==='进展反馈')go('feedback',id);
+ else if(act==='结果报告')go('result-report',id);
+ else if(act==='核查')go('verify',id);
+ else go('warn-detail',id);
+}
+
+/* ==================== 页面：信号研判 ==================== */
+PAGES.signals={title:'待研判信号池',html:function(){
+ var h='<div class="tipbar">六源信号统一汇入预警信息池：卫星遥感热点 / 视频烟火识别 / 物联感知 / 人工巡护上报 / 群众举报 / 上级交办。值守人员须在 <b>5 分钟内</b>完成研判。</div>';
+ h+='<div class="card nopad">';
+ SIGNALS.forEach(function(s){
+  h+='<div class="li" onclick="go(\'judge\',\''+s.id+'\')">'+
+   '<span class="lv '+OLV[s.lv].c+'" style="height:20px;align-self:flex-start;margin-top:2px">'+OLV[s.lv].t+'</span>'+
+   '<div style="flex:1;min-width:0"><div class="small b">'+esc(s.src)+'</div>'+
+   '<div class="tiny muted mt8">'+esc(s.id)+' · '+esc(s.area)+' · '+esc(s.t)+'</div>'+
+   '<div class="tiny mt8" style="color:#4A5666">'+esc(s.d)+'</div></div>'+ICONS.right+'</div>';
+ });
+ h+='</div>';
+ h+='<div class="sec-title">今日已研判</div><div class="card nopad">'+
+  '<div class="li"><span class="lv lv-red">工单·红色</span><div style="flex:1"><div class="small b">HY20261023004 龙角山主峰东侧林火</div>'+
+  '<div class="tiny muted mt8">08:40 研判：确认预警 → 已提交带班领导审批</div></div></div>'+
+  '<div class="li"><span class="lv lv-gray">误报解除</span><div style="flex:1"><div class="small b">XH20261023005 金山店镇田埂烟雾</div>'+
+  '<div class="tiny muted mt8">08:28 研判：误报（农户沤肥）→ 记录原因并解除</div></div></div>'+
+  '</div><div style="height:8px"></div>';
+ return h;
+}};
+PAGES.judge={title:'值守研判',html:function(){
+ var s=null;SIGNALS.forEach(function(x){if(x.id===S.param)s=x});if(!s)s=SIGNALS[0];
+ var h='<div class="card"><div class="between"><span class="lv '+OLV[s.lv].c+'">系统建议 '+OLV[s.lv].t+'</span>'+
+  '<span class="tiny muted">'+esc(s.t)+'</span></div>'+
+  '<div class="b mt8" style="font-size:15px">'+esc(s.src)+' · '+esc(s.area)+'</div>'+
+  '<div class="small muted mt8">'+esc(s.place)+'</div>'+
+  '<div class="hr"></div><div class="small" style="line-height:20px;color:#33404F">'+esc(s.d)+'</div></div>';
+ h+='<div class="sec-title">自动判定依据</div><div class="card">'+
+  '<div class="kv"><span class="k">海拔</span><span class="v">286 米（≥200 米）</span></div>'+
+  '<div class="kv"><span class="k">距林缘</span><span class="v">120 米（≤500 米）</span></div>'+
+  '<div class="kv"><span class="k">地类</span><span class="v">有林地（马尾松）</span></div>'+
+  '<div class="kv"><span class="k">是否公益林</span><span class="v">国家级公益林</span></div>'+
+  '<div class="kv"><span class="k">天气风力</span><span class="v">晴 · 东南风 3 级 · 湿度 36%</span></div>'+
+  '<div class="hr"></div><div class="tiny muted">判据来自 GIS/地类/气象数据自动取值，不可自动取值项由人工兜底并留痕。</div></div>';
+ h+='<div class="sec-title">研判结论（三分支）</div><div class="card nopad">'+
+  '<div class="li" onclick="judgeDo(\'confirm\',\''+s.id+'\')"><span class="lv lv-red">确认预警</span><div style="flex:1"><div class="small b">生成火情工单并进入派发</div><div class="tiny muted mt8">系统建议等级：'+OLV[s.lv].t+'</div></div>'+ICONS.right+'</div>'+
+  '<div class="li" onclick="judgeDo(\'check\',\''+s.id+'\')"><span class="lv lv-blue">待核查</span><div style="flex:1"><div class="small b">生成核查工单</div><div class="tiny muted mt8">属地 1 小时内移动端反馈核查结果</div></div>'+ICONS.right+'</div>'+
+  '<div class="li" onclick="judgeDo(\'false\',\''+s.id+'\')"><span class="lv lv-gray">误报</span><div style="flex:1"><div class="small b">记录原因并解除预警</div><div class="tiny muted mt8">如：农户沤肥、反光、云雾误识别</div></div>'+ICONS.right+'</div>'+
+  '</div><div style="height:8px"></div>';
+ return h;
+}};
+function judgeDo(type,id){
+ var s=null;SIGNALS.forEach(function(x){if(x.id===id)s=x});
+ if(type==='false'){
+  sheet('<h3>标记为误报</h3><div class="sub">记录原因后解除预警</div>'+
+   '<div class="pick">'+['农户沤肥/烧荒','反光或云雾误识别','设备误报','重复信号','其他'].map(function(t,i){
+     return '<span class="chip'+(i===0?' on':'')+'" onclick="chipSel(this,\'pick\')">'+t+'</span>'}).join('')+'</div>'+
+   '<div class="form-item" style="border:1px solid #EEF1F6;border-radius:10px;margin-top:12px"><span class="lab">补充说明</span>'+
+   '<span class="val"><textarea id="fa-txt" placeholder="请输入">现场核实为农户沤肥产生烟雾，无明火。</textarea></span></div>'+
+   '<div class="row mt12"><button class="btn ghost" onclick="closeTop()">取消</button><button class="btn" onclick="judgeFalseOk(\''+id+'\')">提交并解除</button></div>');
+  return;
+ }
+ if(type==='check'){
+  dialog({title:'已生成核查工单',body:'核查工单 <b>HC'+String(Date.now()).slice(-8)+'</b> 已派发至 <b>'+(s?s.area:'属地')+'值班室</b>，<br>请属地在 <b>1 小时内</b>通过移动端反馈核查结果（地类 / 核查人 / 描述 / 照片视频）。',
+   ok:'知道了',onOk:function(){SIGNALS=SIGNALS.filter(function(x){return x.id!==id});S.stack=[];S.page='signals';render();toast('信号已转入核查流程，属地须 1 小时内反馈')}});
+  return;
+ }
+ /* 确认预警 → 生成新工单 */
+ var newId='HY20261023'+String(ORDERS.length+1).padStart(3,'0');
+ var lv=s?s.lv:'yellow';
+ var lvCN={red:'红色',orange:'橙色',yellow:'黄色'}[lv]||'黄色';
+ ORDERS.unshift({id:newId,lv:lv,st:'dispatching',title:(s?s.area:'')+(s?s.place.slice(0,6):'')+'火情',area:s?s.area:'灵乡镇',
+  place:s?s.place:'—',src:s?s.src:'—',area0:'0.6 亩（初判）',dir:'待现场确认',weather:'晴 · 东南风 3 级 · 26℃ · 湿度 36%',suggest:lvCN,
+  create:nowTime(),dispatch:'',sign:'',arrive:'',dlSign:0,
+  signals:[{t:nowTime().slice(11),s:s?s.src:'—',d:s?s.d:'—'}],
+  events:[{t:nowTime().slice(11),b:me().r+' '+me().n,x:'研判确认为预警，生成火情工单（建议等级：'+OLV[lv].t+'）'}],
+  advice:['按建议等级执行分级派发','每 30 分钟反馈一次进展','明火扑灭后 30 分钟内提交结果报告'],dispatchees:[]});
+ SIGNALS=SIGNALS.filter(function(x){return x.id!==id});
+ dialog({title:'已生成火情工单',body:'工单号 <b>'+newId+'</b><br>建议等级：<b>'+OLV[lv].t+'</b><br>请立即完成分级派发（'+(lv==='red'?'红色：审批后 3 分钟':(lv==='orange'?'橙色：值守 3 分钟':'黄色：平台自动 5 分钟'))+'）。',
+  ok:'去派发',onOk:function(){S.stack=[];S.page='warn-detail';S.param=newId;render();toast('新工单已生成，等待派发')}});
+}
+function judgeFalseOk(id){
+ var t=document.getElementById('fa-txt');
+ closeTop();SIGNALS=SIGNALS.filter(function(x){return x.id!==id});
+ dialog({title:'预警已解除',body:'信号 <b>'+esc(id)+'</b> 已标记为误报并归档。<br>原因：'+esc(t&&t.value?t.value:'—')+'<br><span class="muted">误报记录纳入来源质量分析（完整率、误报率）。</span>',
+ ok:'返回信号池',onOk:function(){S.stack=[];S.page='signals';render()}});
+}
+
+/* ==================== 页面：巡查上报 ==================== */
+PAGES.report={title:'现场巡查上报',tab:'',html:function(){
+ var f=S.form.report;
+ var h='';
+ h+='<div class="card nopad">'+
+  '<div class="form-item"><span class="lab">上报类型</span><span class="pick">'+
+   ['火情','林区隐患','秸秆焚烧','防汛隐患','其他'].map(function(t){return '<span class="chip'+(f.type===t?' on':'')+'" onclick="chipSel(this,\'pick\');S.form.report.type=\''+t+'\'">'+t+'</span>'}).join('')+
+  '</span></div>'+
+  '<div class="form-item"><span class="lab">事发乡镇</span><span class="val"><select id="rp-area" onchange="S.form.report.area=this.value">'+
+   ['灵乡镇','陈贵镇','殷祖镇','金牛镇','保安镇','还地桥镇','茗山乡','大箕铺镇','刘仁八镇','金山店镇','汪仁镇','东岳路街道','罗家桥街道','金湖街道'].map(function(t){
+    return '<option'+(f.area===t?' selected':'')+'>'+t+'</option>'}).join('')+'</select></span></div>'+
+  '<div class="form-item"><span class="lab">详细位置</span><span class="val"><span id="rp-loc" class="'+(f.loc?'':'muted')+'">'+esc(f.loc||'点击右侧按钮获取当前定位')+'</span></span>'+
+   '<button class="btn-sm line" onclick="doLocate(\'rp-loc\',\'report\')">'+ICONS.loc+' 定位</button></div>'+
+  '<div class="form-item"><span class="lab">紧急程度</span><span class="pick">'+
+   ['一般','较急','紧急'].map(function(t){return '<span class="chip'+(f.urgent===t?' on':'')+'" onclick="chipSel(this,\'pick\');S.form.report.urgent=\''+t+'\'">'+t+'</span>'}).join('')+
+  '</span></div>'+
+  '<div class="form-item" style="align-items:flex-start"><span class="lab">现场描述</span><span class="val">'+
+   '<textarea id="rp-desc" placeholder="请描述现场情况：是否有明火、烟点、大致面积、蔓延方向等">'+esc(f.desc)+'</textarea></span></div>'+
+  '<div class="form-item" style="align-items:flex-start"><span class="lab">现场照片</span><span class="val">'+
+   photoGrid(f.photo,'addPhoto','delPhoto')+'<div class="tiny muted mt8">最多 6 张，自动附带时间与定位水印</div></span></div>'+
+  '<div class="form-item"><span class="lab">联系电话</span><span class="val">138-7276-4192（自动带入）</span></div>'+
+  '</div><div style="height:8px"></div>';
+ return h;
+},bar:function(){return '<button class="btn ghost" onclick="resetReport()">重置</button><button class="btn" onclick="submitReport()">提交上报</button>'}};
+function chipSel(el,cls){
+ var p=el.parentNode;
+ for(var i=0;i<p.children.length;i++){p.children[i].classList.remove('on')}
+ el.classList.add('on');
+}
+function curForm(){
+ if(S.page==='report')return S.form.report;
+ if(S.page==='feedback')return S.form.fb;
+ return S.form.rr;
+}
+function addPhoto(){var f=curForm();if(f.photo<6)f.photo++;render();toast('已添加 1 张模拟照片')}
+function delPhoto(i){var f=curForm();if(f.photo>0)f.photo--;render()}
+function doLocate(id,form){
+ toast('正在获取定位…',700);
+ setTimeout(function(){
+  var loc='大冶市灵乡镇黄坪山林区大畈村（114.9583, 30.1036）';
+  S.form[form].loc=loc;var el=document.getElementById(id);
+  if(el){el.className='';el.innerHTML=loc+' <span class="tiny" style="color:#1E9E63">已校准</span>'}
+  toast('定位成功 · 已自动匹配最近林区网格');
+ },700);
+}
+function resetReport(){S.form.report={type:'火情',area:'灵乡镇',desc:'',photo:0,urgent:'一般',loc:''};render();toast('已重置')}
+function submitReport(){
+ var d=document.getElementById('rp-desc');
+ var desc=d?d.value:'';
+ if(!desc.trim()){toast('请填写现场描述');return}
+ var loc=S.form.report.loc||'大冶市灵乡镇黄坪山林区大畈村（114.9583, 30.1036）';
+ var id='SB20261023'+String(MYREPORTS.length+1).padStart(3,'0');
+ MYREPORTS.unshift({id:id,t:nowTime(),type:S.form.report.type,area:S.form.report.area,st:'待研判',
+  d:desc+'（'+(S.form.report.photo)+' 张照片 · '+loc+' · '+S.form.report.urgent+'）',oid:''});
+ resetReport();
+ dialog({title:'上报成功',body:'上报编号 <b>'+id+'</b><br>已汇入预警信息池，值守人员将在 5 分钟内完成研判。<br><span class="muted">若为真实火情，将自动生成火情工单并派发到您的待办。</span>',
+  ok:'查看我的上报',onOk:function(){S.stack=[];S.page='my-reports';render()}});
+}
+
+/* ==================== 页面：处置进展反馈 ==================== */
+PAGES.feedback={title:'处置进展反馈',html:function(){
+ var o=O(S.param)||ORDERS[0],f=S.form.fb;
+ var h='<div class="card" style="padding:12px 14px"><div class="row"><span class="lv '+OLV[o.lv].c+'">'+OLV[o.lv].t+'</span>'+
+  '<span class="small b" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(o.title)+'</span></div>'+
+  '<div class="tiny muted mt8">'+esc(o.id)+' · '+esc(o.area)+' · 每 30 分钟需反馈一次</div></div>';
+ h+='<div class="card nopad">'+
+  '<div class="form-item"><span class="lab">反馈类型</span><span class="pick">'+
+   ['到场','进展更新','请求支援','明火已扑灭'].map(function(t){return '<span class="chip'+(f.type===t?' on':'')+'" onclick="chipSel(this,\'pick\');S.form.fb.type=\''+t+'\'">'+t+'</span>'}).join('')+'</span></div>'+
+  '<div class="form-item"><span class="lab">定位打卡</span><span class="val"><span id="fb-loc" class="'+(f.loc?'':'muted')+'">'+esc(f.loc||'点击右侧按钮打卡')+'</span></span>'+
+   '<button class="btn-sm line" onclick="doLocate(\'fb-loc\',\'fb\')">'+ICONS.loc+' 打卡</button></div>'+
+  '<div class="form-item" style="align-items:flex-start"><span class="lab">进展描述</span><span class="val">'+
+   '<textarea id="fb-desc" placeholder="请描述当前火势、已采取措施、投入力量、存在困难等">'+esc(f.desc)+'</textarea></span></div>'+
+  '<div class="form-item" style="align-items:flex-start"><span class="lab">现场照片</span><span class="val">'+
+   photoGrid(f.photo,'addPhoto','delPhoto')+'</span></div>'+
+  '<div class="form-item" style="align-items:flex-start"><span class="lab">下一步计划</span><span class="val">'+
+   '<textarea id="fb-next" placeholder="如：继续开设隔离带，留守 4 人看护" style="min-height:56px">'+esc(f.next)+'</textarea></span></div>'+
+  '</div>';
+ h+='<div class="sec-title">历史反馈</div><div class="card"><div class="tl">';
+ o.events.slice(-3).forEach(function(e){
+  h+='<div class="tl-item"><div class="small">'+esc(e.x)+'</div><div class="tiny muted mt8">'+esc(e.t)+' · '+esc(e.b)+'</div></div>';
+ });
+ h+='</div></div><div style="height:8px"></div>';
+ return h;
+},bar:function(){return '<button class="btn ghost" onclick="back()">取消</button><button class="btn" onclick="submitFb()">提交反馈</button>'}};
+function submitFb(){
+ var d=document.getElementById('fb-desc'),n=document.getElementById('fb-next'),o=O(S.param);
+ if(!d||!d.value.trim()){toast('请填写进展描述');return}
+ var type=S.form.fb.type;
+ pushEvent(o,'进展反馈【'+type+'】：'+d.value+(n&&n.value?'；下一步：'+n.value:''));
+ o.dlFeedback=dl(1800);
+ if(type==='明火已扑灭'){o.dlReport=dl(1800);o.dlFeedback=0}
+ S.form.fb={type:'进展更新',desc:'',photo:0,next:'',loc:''};
+ back();toast(type==='明火已扑灭'?'反馈已提交<br>请在 30 分钟内提交结果报告':'反馈已提交 · 下次反馈 30 分钟后',2200);
+}
+
+/* ==================== 页面：结果报告 ==================== */
+PAGES['result-report']={title:'结果报告',html:function(){
+ var o=O(S.param)||ORDERS[0],f=S.form.rr;
+ var h='<div class="tipbar">明火扑灭后 <b>30 分钟内</b>由乡镇值班室提交结果报告；提交后工单进入<b>待核查</b>，由市应急局图核/电话/现场核查。</div>';
+ h+='<div class="card" style="padding:12px 14px"><div class="row"><span class="lv '+OLV[o.lv].c+'">'+OLV[o.lv].t+'</span>'+
+  '<span class="small b" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(o.title)+'</span></div>'+
+  '<div class="tiny muted mt8">'+esc(o.id)+' · '+esc(o.area)+' · '+esc(o.place)+'</div></div>';
+ h+='<div class="card nopad">'+
+  '<div class="form-item"><span class="lab">扑灭时间</span><span class="val">'+esc(nowTime())+'（自动记录）</span></div>'+
+  '<div class="form-item"><span class="lab">过火面积</span><span class="val"><input id="rr-area" placeholder="请输入认定面积（亩）" value="'+esc(f.area)+'"></span><span class="muted small">亩</span></div>'+
+  '<div class="form-item"><span class="lab">地类</span><span class="val"><select id="rr-type">'+
+   ['有林地（马尾松）','灌木林地','未成林地','荒草地','耕地','其他'].map(function(t){return '<option'+(f.type===t?' selected':'')+'>'+t+'</option>'}).join('')+'</select></span></div>'+
+  '<div class="form-item"><span class="lab">起火原因</span><span class="val"><select id="rr-cause">'+
+   ['待调查','祭祀用火','农事用火（烧荒）','吸烟','儿童玩火','雷击','电线短路','故意纵火（移交公安）'].map(function(t){return '<option'+(f.cause===t?' selected':'')+'>'+t+'</option>'}).join('')+'</select></span></div>'+
+  '<div class="form-item"><span class="lab">参与力量</span><span class="val"><input id="rr-force" placeholder="如：半专业队 18 人 · 镇村干部 6 人" value="'+esc(f.force)+'"></span></div>'+
+  '<div class="form-item"><span class="lab">人员伤亡</span><span class="val">无人员伤亡</span></div>'+
+  '<div class="form-item"><span class="lab">留守看护</span><span class="val"><input id="rr-guard" placeholder="如：灵乡镇 2 人留守看护至 20:00" value="'+esc(f.guard)+'"></span></div>'+
+  '<div class="form-item" style="align-items:flex-start"><span class="lab">现场照片</span><span class="val">'+
+   photoGrid(f.photo,'addPhoto','delPhoto')+'<div class="tiny muted mt8">需包含过火区域全景 + 边界照片</div></span></div>'+
+  '</div><div style="height:8px"></div>';
+ return h;
+},bar:function(){return '<button class="btn ghost" onclick="back()">取消</button><button class="btn ok" onclick="submitRR()">提交结果报告</button>'}};
+function submitRR(){
+ var o=O(S.param),a=document.getElementById('rr-area');
+ if(!a||!a.value.trim()){toast('请填写过火面积认定');return}
+ o.report={time:nowTime(),area:a.value+' 亩',type:document.getElementById('rr-type').value,
+  cause:document.getElementById('rr-cause').value,force:document.getElementById('rr-force').value||'—',
+  hurt:'无人员伤亡',guard:document.getElementById('rr-guard').value||'—'};
+ o.st='checking';o.dlReport=0;
+ pushEvent(o,'提交结果报告：过火面积 '+o.report.area+'，地类 '+o.report.type+'，起火原因初判 '+o.report.cause);
+ S.form.rr={area:'',type:'有林地',cause:'待调查',force:'',guard:'',photo:0};
+ MSGS.unshift({id:Date.now(),type:'工单',t:nowTime().slice(11),title:'【待核查】'+o.id+' 结果报告已提交',d:'请市应急局在规定时限内完成核查（图核/电话/现场）。',oid:o.id,unread:1});
+ back();toast('结果报告已提交<br>工单已转入「待核查」',2200);
+}
+
+/* ==================== 页面：核查 ==================== */
+PAGES.verify={title:'核查督办',html:function(){
+ var o=O(S.param)||ORDERS[0],f=S.form.verify;
+ var h='<div class="card" style="padding:12px 14px"><div class="row"><span class="lv '+OLV[o.lv].c+'">'+OLV[o.lv].t+'</span>'+
+  '<span class="small b" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(o.title)+'</span></div>'+
+  '<div class="tiny muted mt8">'+esc(o.id)+' · '+esc(o.area)+' · 结果报告 '+esc((o.report||{}).time||'')+'</div></div>';
+ h+='<div class="sec-title">结果报告内容</div><div class="card">'+
+  '<div class="kv"><span class="k">过火面积</span><span class="v">'+esc((o.report||{}).area)+'</span></div>'+
+  '<div class="kv"><span class="k">地类</span><span class="v">'+esc((o.report||{}).type)+'</span></div>'+
+  '<div class="kv"><span class="k">起火原因</span><span class="v">'+esc((o.report||{}).cause)+'</span></div>'+
+  '<div class="kv"><span class="k">参与力量</span><span class="v">'+esc((o.report||{}).force)+'</span></div>'+
+  '<div class="kv"><span class="k">留守看护</span><span class="v">'+esc((o.report||{}).guard)+'</span></div></div>';
+ h+='<div class="sec-title">核查方式</div><div class="card nopad">'+
+  ['图核（卫星/视频影像比对）','电话核查（询问值班室）','现场核查（派员实地）'].map(function(t,i){
+   return '<div class="opt'+(f.way===t.slice(0,2)?' on':'')+'" onclick="optSel(this);S.form.verify.way=\''+t+'\'"><div><div class="small b">'+esc(t)+'</div>'+
+    '<div class="tiny muted">'+(i===0?'系统自动比对过火区域与上报面积':(i===1?'记录通话时间与接听人':'需上传现场核查照片与定位'))+'</div></div><span class="rk"></span></div>';
+  }).join('')+'</div>';
+ h+='<div class="tipbar">核查不通过须填写退回原因，工单回退至「处置中」重新处置；退回次数与核查通过率纳入考核。</div>';
+ return h;
+},bar:function(){return '<button class="btn danger" onclick="verifyBack()">退回重办</button><button class="btn ok" onclick="verifyPass()">核查通过并销号</button>'}};
+function optSel(el){
+ var p=el.parentNode;for(var i=0;i<p.children.length;i++){p.children[i].classList.remove('on')}
+ el.classList.add('on');
+}
+function verifyBack(){
+ sheet('<h3>退回重办</h3><div class="sub">工单将回退至「处置中」，请填写退回原因</div>'+
+  '<div class="pick">'+['过火面积认定依据不足','现场照片不清晰或不完整','起火原因未查清','未落实留守看护','与卫星/视频影像不符'].map(function(t,i){
+   return '<span class="chip'+(i===0?' on':'')+'" onclick="chipSel(this,\'pick\')">'+esc(t)+'</span>'}).join('')+'</div>'+
+  '<div class="form-item" style="border:1px solid #EEF1F6;border-radius:10px;margin-top:12px"><span class="lab">详细说明</span>'+
+  '<span class="val"><textarea id="bk-txt" placeholder="请说明需补充的内容">上报过火面积与卫星影像比对差异较大，请重新认定并补充边界照片。</textarea></span></div>'+
+  '<div class="row mt12"><button class="btn ghost" onclick="closeTop()">取消</button><button class="btn danger" onclick="verifyBackOk()">确认退回</button></div>');
+}
+function verifyBackOk(){
+ var o=O(S.param),t=document.getElementById('bk-txt');
+ closeTop();o.st='working';o.dlReport=dl(1800);
+ pushEvent(o,'市局核查退回：'+(t&&t.value?t.value:'—')+'（工单回退至处置中，退回次数 1）');
+ MSGS.unshift({id:Date.now(),type:'工单',t:nowTime().slice(11),title:'【退回重办】'+o.id+' 核查未通过',d:'请补充处置后重新提交结果报告。',oid:o.id,unread:1});
+ back();toast('已退回重办<br>工单状态：处置中',2200);
+}
+function verifyPass(){
+ var o=O(S.param);
+ dialog({title:'核查通过',body:'确认工单 <b>'+esc(o.id)+'</b> 核查通过？<br>通过后工单<b>办结销号</b>并自动归档（保存 ≥3 年，归档后只读）。',
+  ok:'确认通过',okCls:'ok',onOk:function(){
+   o.st='archived';
+   pushEvent(o,'市局核查通过（'+S.form.verify.way+'）→ 办结销号 → 自动归档');
+   MSGS.unshift({id:Date.now(),type:'工单',t:nowTime().slice(11),title:'【办结】'+o.id+' 已销号归档',d:'核查通过，全流程归档完成，纳入月度统计与考核。',oid:o.id,unread:1});
+   back();toast('核查通过 · 已办结销号<br>全流程自动归档完成',2400);
+  }});
+}
+
+/* ==================== 页面：消息 ==================== */
+PAGES.message={title:'消息通知',html:function(){
+ var segs=['全部','工单','预警','系统'],i=S.seg.msg,h='<div class="seg">';
+ segs.forEach(function(t,k){h+='<div class="'+(i===k?'on':'')+'" onclick="setSeg(\'msg\','+k+')">'+t+'</div>'});
+ h+='</div><div class="card nopad">';
+ MSGS.filter(function(g){return i===0||g.type===segs[i]||(i===1&&(g.type==='工单'||g.type==='审批'))}).forEach(function(g){
+  h+='<div class="li" onclick="msgGo('+g.id+')">'+
+   '<span class="dot" style="background:'+(g.unread?'#D92B2B':'#D6DCE6')+';margin-top:6px;flex:0 0 8px"></span>'+
+   '<div style="flex:1;min-width:0"><div class="between"><span class="small b">'+esc(g.title)+'</span><span class="tiny muted">'+esc(g.t)+'</span></div>'+
+   '<div class="tiny muted mt8" style="line-height:18px">'+esc(g.d)+'</div></div></div>';
+ });
+ h+='</div><div style="height:8px"></div>';
+ return h;
+}};
+
+/* ==================== 页面：我的 ==================== */
+PAGES.mine={title:'我的',tab:'mine',html:function(){
+ var m=me();
+ var h='<div style="background:linear-gradient(135deg,#0F4C9B,#1668DC);padding:16px;color:#fff">'+
+  '<div class="row"><span style="width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:600">'+esc(m.n.slice(0,1))+'</span>'+
+  '<div><div style="font-size:17px;font-weight:600">'+esc(m.n)+'</div>'+
+  '<div class="small" style="opacity:.9;margin-top:3px">'+esc(m.r)+' · '+esc(m.o)+'</div>'+
+  '<div class="tiny" style="opacity:.75;margin-top:3px">'+esc(m.desc)+'</div></div></div></div>';
+ h+='<div class="card nopad mt12">'+
+  menuRow('my-reports','我的上报记录','查看本人提交的上报及处置进度')+
+  '<div class="li"><div style="flex:1"><div class="small b">通讯录</div><div class="tiny muted mt8">市/镇/村三级责任人 328 人</div></div>'+ICONS.right+'</div>'+
+  /* 页面跳转关系说明入口暂收起（宽屏侧栏 #flowmap 已平铺同内容）；恢复时取消下一行注释
+  menuRow('flow','页面跳转关系说明','15 个页面的跳转地图与业务闭环')+
+  */
+  /* 信号研判为 PC 端值守功能，移动端暂不展示；恢复时取消下一行注释
+  menuRow('signals','信号研判（值守）','待研判信号池与三分支研判')+
+  */
+  '</div>';
+ h+='<div class="sec-title">系统设置</div><div class="card nopad">'+
+  '<div class="li"><div style="flex:1"><div class="small b">消息通知</div><div class="tiny muted mt8">短信 + 移动端推送 + 电话兜底</div></div>'+
+  '<span class="lv lv-blue">已开启</span></div>'+
+  '<div class="li"><div style="flex:1"><div class="small b">定位权限</div><div class="tiny muted mt8">用于到场打卡与上报定位</div></div>'+
+  '<span class="lv lv-blue">已开启</span></div>'+
+  '<div class="li"><div style="flex:1"><div class="small b">值班排班</div><div class="tiny muted mt8">今日 08:00—20:00（王建国 / 备班 赵强）</div></div>'+ICONS.right+'</div>'+
+  '</div>';
+ h+='<div style="height:8px"></div>';
+ return h;
+}};
+function menuRow(p,t,d){
+ return '<div class="li" onclick="go(\''+p+'\')"><div style="flex:1"><div class="small b">'+esc(t)+'</div>'+
+  '<div class="tiny muted mt8">'+esc(d)+'</div></div>'+ICONS.right+'</div>';
+}
+function switchRole(k){S.role=k;toast('已切换为：'+me().r+' · '+me().n);render()}
+function roleSheet(){
+ var h='<h3>切换角色</h3><div class="sub">切换后首页待办与工单操作权限同步刷新</div>';
+ ROLES.forEach(function(r){
+  h+='<div class="opt'+(r.k===S.role?' on':'')+'" onclick="roleSel(\''+r.k+'\',this)">'+
+   '<div><div class="small b">'+esc(r.r)+' · '+esc(r.n)+'</div>'+
+   '<div class="tiny muted mt8">'+esc(r.o)+'｜'+esc(r.desc)+'</div></div><span class="rk"></span></div>';
+ });
+ h+='<div class="row mt16"><button class="btn ghost" onclick="closeTop()">取消</button>'+
+   '<button class="btn" onclick="roleOk()">确认切换</button></div>';
+ sheet(h);
+}
+function roleSel(k,el){
+ var p=el.parentNode;
+ for(var i=0;i<p.children.length;i++){p.children[i].classList.remove('on')}
+ el.classList.add('on');S.tmpRole=k;
+}
+function roleOk(){
+ var k=S.tmpRole||S.role;
+ closeTop();
+ if(k!==S.role){S.role=k;toast('已切换为：'+me().r+' · '+me().n)}
+ else{toast('当前已是该角色')}
+ S.tmpRole='';render();
+}
+
+/* ==================== 页面：我的上报 ==================== */
+PAGES['my-reports']={title:'我的上报记录',html:function(){
+ var h='<div class="card nopad">';
+ MYREPORTS.forEach(function(r){
+  var c=r.st==='待研判'?'lv-blue':(r.st==='已转工单'?'lv-orange':'lv-gray');
+  h+='<div class="li" onclick="'+(r.oid?'go(\'warn-detail\',\''+r.oid+'\')':'toast(\'该上报仍在研判队列中\')')+'">'+
+   '<span class="lv '+c+'" style="height:20px;align-self:flex-start;margin-top:2px">'+esc(r.st)+'</span>'+
+   '<div style="flex:1;min-width:0"><div class="between"><span class="small b">'+esc(r.type)+'</span><span class="tiny muted">'+esc(r.t)+'</span></div>'+
+   '<div class="tiny muted mt8">'+esc(r.id)+' · '+esc(r.area)+'</div>'+
+   '<div class="tiny mt8" style="color:#4A5666;line-height:18px">'+esc(r.d)+'</div>'+
+   (r.oid?'<div class="tiny mt8" style="color:#1668DC">关联工单：'+esc(r.oid)+' ›</div>':'')+'</div></div>';
+ });
+ h+='</div><div style="height:8px"></div>';
+ return h;
+}};
+
+/* ==================== 页面：流程说明 ==================== */
+var FLOW_CHAIN='① 巡查上报 / 六源信号→② 值守研判（5 分钟）→③ 生成火情工单→④ 分级派发（黄/橙/红）→⑤ 乡镇值班室 5 分钟签收→⑥ 到场处置（15/30/60 分钟）→⑦ 每 30 分钟进展反馈→⑧ 扑灭后 30 分钟结果报告→⑨ 市局核查（通过/退回）→⑩ 办结销号并归档';
+var FLOW_ROWS=[
+  ['登录 login','账密登录 / 手机号验证码登录 → 进入首页'],
+  ['首页 home','→ 火险预警详情 / 工单详情 / 巡查上报 / 我的待办 / 消息'],
+  ['预警 warn-list','火险预警·工单预警·应急响应 三分段 → 工单详情 / 火险详情'],
+  ['巡查上报 report','提交 ⇢ 成功弹窗 → 我的上报记录'],
+  ['待办 todo','全部/待审批/待签收/待反馈/待核查 → 工单详情'],
+  ['信号研判 judge','三分支 ⇢ 确认预警→生成工单→派发 ｜ 待核查→核查工单 ｜ 误报→解除（PC 功能，移动端入口已收起）'],
+  ['工单详情 warn-detail','⇢ 审批 / 派发 / 签收 / 到场打卡 / →进展反馈 / →结果报告 / →核查'],
+  ['进展反馈 feedback','提交 → 回写工单时间轴，重置 30 分钟计时'],
+  ['结果报告 result-report','提交 → 工单转入「待核查」'],
+  ['核查 verify','通过 ⇢ 办结销号+归档 ｜ 退回 ⇢ 填原因 → 回退「处置中」'],
+  ['消息 message','按类型筛选 → 关联工单详情'],
+  ['我的 mine','→ 我的上报 / 通讯录；系统设置 3 项（跳转关系入口已收起，见宽屏侧栏）'],
+  ['我的上报 my-reports','→ 关联工单详情（已转工单）']
+];
+PAGES.flow={title:'页面跳转关系',html:function(){
+ var h='<div class="card"><div class="b">业务闭环主线</div>'+
+  '<div class="small mt8" style="line-height:22px;color:#33404F">'+
+  FLOW_CHAIN.replace(/→/g,' → ')+
+  '</div></div>';
+ h+='<div class="sec-title">页面跳转关系</div><div class="card nopad">';
+ FLOW_ROWS.forEach(function(r){
+  h+='<div style="padding:10px 14px;border-bottom:1px solid #F1F4F9"><div class="small b">'+esc(r[0])+'</div>'+
+   '<div class="tiny muted mt8" style="line-height:18px">'+esc(r[1])+'</div></div>';
+ });
+ h+='</div>';
+ h+='<div class="sec-title">三套分级（严禁混用）</div><div class="card">'+
+  '<div class="kv"><span class="k">事前·森林火险</span><span class="v"><span class="lv lv-blue">蓝</span> <span class="lv lv-yellow">黄</span> <span class="lv lv-orange">橙</span> <span class="lv lv-red">红</span> 四级，气象局预报+森防办发布</span></div>'+
+  '<div class="kv"><span class="k">事中·火情工单</span><span class="v"><span class="lv lv-yellow">黄</span> <span class="lv lv-orange">橙</span> <span class="lv lv-red">红</span> 三级，决定派发时限与到场要求</span></div>'+
+  '<div class="kv"><span class="k">成灾·应急响应</span><span class="v"><span class="lv lv-resp">Ⅳ</span> <span class="lv lv-resp">Ⅲ</span> <span class="lv lv-resp">Ⅱ</span> <span class="lv lv-resp">Ⅰ</span> 级，6/12/24/48 小时为升档主轴</span></div>'+
+  '<div class="hr"></div><div class="tiny muted">界面与通知文案必须带限定词（如「工单·红色」「火险·橙色」「响应·Ⅳ级」），禁止只写「红色预警」。</div></div>';
+ h+='<div class="sec-title">关键时限</div><div class="card">'+
+  '<div class="kv"><span class="k">值守研判</span><span class="v">5 分钟</span></div>'+
+  '<div class="kv"><span class="k">分级派发</span><span class="v">黄 自动 5 分钟 / 橙 值守 3 分钟 / 红 审批后 3 分钟</span></div>'+
+  '<div class="kv"><span class="k">接单确认</span><span class="v">乡镇值班室 5 分钟</span></div>'+
+  '<div class="kv"><span class="k">到场</span><span class="v">村 15 / 乡镇 30 / 市救援队 60 分钟</span></div>'+
+  '<div class="kv"><span class="k">进展反馈</span><span class="v">每 30 分钟</span></div>'+
+  '<div class="kv"><span class="k">结果报告</span><span class="v">扑灭后 30 分钟内</span></div>'+
+  '<div class="kv"><span class="k">对外法定报告</span><span class="v">首报 20 分钟 / 续报 30 分钟 / 卫星热点核查 30 分钟</span></div>'+
+  '<div class="kv"><span class="k">归档保存</span><span class="v">≥3 年</span></div></div>';
+ h+='<div style="height:8px"></div>';
+ return h;
+}};
+
+/* ==================== 宽屏跳转关系平铺侧栏 ==================== */
+function renderFlowmap(){
+ var h='<div class="fm-title">页面跳转关系 · 全局视图</div>'+
+  '<div class="fm-sub">与手机端「我的 → 页面跳转关系说明」同源数据，平铺展示便于评审对照</div>';
+ h+='<div class="fm-sec">业务闭环主线</div><div class="fm-chain">';
+ FLOW_CHAIN.split('→').forEach(function(st,i2){
+  if(i2)h+='<i>→</i>';
+  h+='<span>'+esc(st.trim())+'</span>';
+ });
+ h+='</div>';
+ h+='<div class="fm-sec">页面跳转（'+FLOW_ROWS.length+' 个页面）</div><div class="fm-grid">';
+ FLOW_ROWS.forEach(function(r){
+  var n=r[0],en='';
+  var m=n.match(/^(.*?)\s+([a-z-]+)$/);
+  if(m){n=m[1];en=m[2]}
+  h+='<div class="fm-cell"><div class="t">'+esc(n)+(en?'<em>'+esc(en)+'</em>':'')+'</div><div class="d">'+esc(r[1])+'</div></div>';
+ });
+ h+='</div>';
+ h+='<div class="fm-sec">三套分级（严禁混用）</div>'+
+  '<div class="fm-kv"><span class="k">事前·森林火险</span><span class="v">蓝 / 黄 / 橙 / 红 四级 · 气象局预报+森防办发布</span></div>'+
+  '<div class="fm-kv"><span class="k">事中·火情工单</span><span class="v">黄 / 橙 / 红 三级 · 决定派发时限与到场要求</span></div>'+
+  '<div class="fm-kv"><span class="k">成灾·应急响应</span><span class="v">Ⅳ / Ⅲ / Ⅱ / Ⅰ 级 · 6/12/24/48 小时升档主轴</span></div>';
+ h+='<div class="fm-sec">关键时限</div>'+
+  '<div class="fm-kv"><span class="k">值守研判</span><span class="v">5 分钟</span></div>'+
+  '<div class="fm-kv"><span class="k">分级派发</span><span class="v">黄 自动 5 分 / 橙 值守 3 分 / 红 审批后 3 分</span></div>'+
+  '<div class="fm-kv"><span class="k">接单确认</span><span class="v">乡镇值班室 5 分钟</span></div>'+
+  '<div class="fm-kv"><span class="k">到场</span><span class="v">村 15 / 乡镇 30 / 市救援队 60 分钟</span></div>'+
+  '<div class="fm-kv"><span class="k">进展反馈</span><span class="v">每 30 分钟</span></div>'+
+  '<div class="fm-kv"><span class="k">结果报告</span><span class="v">扑灭后 30 分钟内</span></div>'+
+  '<div class="fm-kv"><span class="k">对外法定报告</span><span class="v">首报 20 分 / 续报 30 分 / 热点核查 30 分</span></div>';
+ document.getElementById('flowmap').innerHTML=h;
+}
+
+/* ==================== 渲染 ==================== */
+function render(){
+ var p=PAGES[S.page];
+ if(!p){S.page='home';p=PAGES.home}
+ var nb=document.getElementById('navbar');
+ if(p.noNav){nb.style.display='none';document.getElementById('statusbar').style.background='#0F4C9B'}
+ else{
+  nb.style.display='flex';
+  var canBack=S.stack.length||S.page==='report';
+  nb.innerHTML=(canBack?'<span class="nb-btn" onclick="back()">'+ICONS.back+'</span>':'<span class="nb-btn" style="width:8px"></span>')+
+   '<span class="nb-title">'+esc(p.title)+'</span>'+
+   '<span class="nb-btn right">'+(p.right||'')+'</span>';
+ }
+ var v=document.getElementById('view');
+ v.innerHTML=p.html();
+ v.scrollTop=0;
+ var ab=document.getElementById('actionbar');
+ if(p.bar){ab.className='actionbar';ab.innerHTML=p.bar()}else{ab.className='';ab.innerHTML=''}
+ var tb=document.getElementById('tabbar');
+ if(p.tab){
+  tb.style.display='flex';
+  var h='';
+  TABS.forEach(function(t){
+   var on=t.k===p.tab;
+   h+='<div class="tab'+(on?' on':'')+(t.k==='report'?' mid':'')+'" onclick="tab(\''+t.k+'\')">'+
+     '<span class="ic">'+(t.k==='home'?ICONS.home:(t.k==='warn'?ICONS.warn:(t.k==='report'?ICONS.plus:(t.k==='todo'?ICONS.task:ICONS.user))))+'</span>'+
+     (t.k==='report'?'':'<span>'+t.t+'</span>')+'</div>';
+  });
+  tb.innerHTML=h;
+ }else{tb.style.display='none'}
+ tick();
+}
+
+/* 倒计时 */
+function tick(){
+ var els=document.querySelectorAll('.cd');
+ for(var i=0;i<els.length;i++){
+  var e=els[i],d=parseFloat(e.getAttribute('data-dl'));
+  if(!d){e.textContent='—';continue}
+  var left=d-Date.now();
+  e.textContent=cdText(left);
+  if(left<0){e.classList.add('over')}
+ }
+ var d=new Date(),p=function(x){return x<10?'0'+x:''+x};
+ document.getElementById('sbtime').textContent=p(d.getHours())+':'+p(d.getMinutes());
+}
+setInterval(tick,1000);
+render();
+renderFlowmap();
+</script>
+</body>
+</html>
