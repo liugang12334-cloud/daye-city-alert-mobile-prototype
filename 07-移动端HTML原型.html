@@ -88,7 +88,9 @@ body{background:#EDF1F7;font-family:-apple-system,BlinkMacSystemFont,"PingFang S
 #flowmap .fm-kv:last-child{border-bottom:none}
 #flowmap .fm-kv .k{color:#8A94A6;flex:0 0 96px}
 #flowmap .fm-kv .v{color:#33404F;text-align:right}
+/* 右侧「页面跳转关系 · 全局视图」平铺面板已收起；恢复时取消下一行注释
 @media (min-width:1060px){#flowmap{display:block}}
+*/
 .screen{position:absolute;inset:0;display:flex;flex-direction:column;background:#F4F6FA}
 /* 状态栏 */
 .statusbar{height:30px;flex:0 0 30px;background:#0F4C9B;display:flex;align-items:center;justify-content:space-between;
@@ -1338,7 +1340,7 @@ function tick(){
 }
 setInterval(tick,1000);
 render();
-renderFlowmap();
+/* 平铺面板已收起：renderFlowmap(); */
 </script>
 </body>
 </html>
